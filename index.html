@@ -790,6 +790,7 @@ function render() {
   index();
   if (ui.view !== 'overview' && !IDX.initById.has(ui.view)) { ui.view = 'overview'; ui.track = 'all'; }
   const app = document.getElementById('app');
+  const kept = captureScroll(app);
   const inits = initiatives();
   const cur = ui.view === 'overview' ? null : IDX.initById.get(ui.view);
   const title = cur ? `What’s next for ${esc(cur.name)}?` : 'Project AHA — Finance Transformation';
@@ -823,6 +824,23 @@ function render() {
     ${cur ? renderInitiativeHeader(cur) : renderOverview(inits)}
     ${renderWork(cur)}`}
   `;
+  restoreScroll(app, kept);
+}
+
+// Re-rendering replaces the board, which would reset where the person had scrolled
+// (back to the first column). Remember each scrollable area and put it back.
+// Kept per tab and track, so switching tabs and back returns to the same place.
+const scrollMemory = {};
+function captureScroll(root) {
+  root.querySelectorAll('[data-scroll-key]').forEach(el => { scrollMemory[el.dataset.scrollKey] = [el.scrollLeft, el.scrollTop]; });
+  return { areas: scrollMemory, x: window.scrollX, y: window.scrollY };
+}
+function restoreScroll(root, kept) {
+  root.querySelectorAll('[data-scroll-key]').forEach(el => {
+    const v = kept.areas[el.dataset.scrollKey];
+    if (v) { el.scrollLeft = v[0]; el.scrollTop = v[1]; }
+  });
+  if (window.scrollX !== kept.x || window.scrollY !== kept.y) window.scrollTo(kept.x, kept.y);
 }
 
 function kpiCards(leaves, heroLabel) {
@@ -993,7 +1011,7 @@ function renderTrackBoard(cur) {
       if (linked.length) cols += `<section class="tcol" aria-label="Linked from other initiatives">
         <div class="tcol-head linkcol"><div class="group-label">Linked from other initiatives</div>
           <div class="meta-line">Shown here, counted in their own initiative.</div></div>
-        <div class="tcol-body">${cardsFor(linked, { linkedInto: cur })}</div></section>`;
+        <div class="tcol-body" data-scroll-key="col-linked">${cardsFor(linked, { linkedInto: cur })}</div></section>`;
     }
   } else {
     cols = initiatives().filter(i => ui.track === 'all' || i.id === ui.track)
@@ -1001,7 +1019,7 @@ function renderTrackBoard(cur) {
   }
   queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cardCount} card${cardCount === 1 ? '' : 's'} · scroll sideways for more columns`; });
   if (!cols) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : cur ? (canEdit() ? 'No tracks yet. Use “+ Add track” to create one.' : 'No tracks yet.') : 'No initiatives yet.'}</div>`;
-  return `<div class="tboard">${cols}</div>`;
+  return `<div class="tboard" data-scroll-key="track-board:${ui.view}:${ui.track}">${cols}</div>`;
 }
 
 function progressLine(item) {
@@ -1025,7 +1043,7 @@ function trackColumn(t, cardsHTML) {
         <button class="btn sm ghost" data-act="add-item" data-init="${t.initiativeId}" data-parent="${t.id}" title="Add a sub-item to this track">+ Sub</button>
         <button class="btn sm" data-act="edit-item" data-id="${t.id}">Edit</button></div>` : ''}
     </div>
-    <div class="tcol-body">${cardsHTML || `<div class="tcol-empty">${kids ? 'No sub-items match the filters.' : 'No sub-items yet.' + (canEdit() ? ' Use “+ Sub” to break this track down.' : '')}</div>`}</div>
+    <div class="tcol-body" data-scroll-key="col-${t.id}">${cardsHTML || `<div class="tcol-empty">${kids ? 'No sub-items match the filters.' : 'No sub-items yet.' + (canEdit() ? ' Use “+ Sub” to break this track down.' : '')}</div>`}</div>
   </section>`;
 }
 
@@ -1040,7 +1058,7 @@ function initiativeColumn(init, cardsHTML) {
       <div class="mini-bar" aria-hidden="true"><div style="width:${st.pct}%"></div></div>
       ${canEdit() ? `<div class="ctrls"><span class="grow"></span><button class="btn sm ghost" data-act="add-item" data-init="${init.id}">+ Track</button><button class="btn sm" data-act="edit-init" data-id="${init.id}">Edit</button></div>` : ''}
     </div>
-    <div class="tcol-body">${cardsHTML || `<div class="tcol-empty">${tracks.length ? 'No tracks match the filters.' : 'No tracks yet.'}</div>`}</div>
+    <div class="tcol-body" data-scroll-key="col-${init.id}">${cardsHTML || `<div class="tcol-empty">${tracks.length ? 'No tracks match the filters.' : 'No tracks yet.'}</div>`}</div>
   </section>`;
 }
 
@@ -1118,7 +1136,7 @@ function renderBoard(cur) {
   cards = cards.filter(matches);
   const cols = STATUSES.filter(s => !(ui.hideDone && isClosed(s)) && (ui.status === 'all' || ui.status === s));
   queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cards.length} card${cards.length === 1 ? '' : 's'}${canEdit() ? ' · drag cards to change status' : ''}`; });
-  return `<div class="board">${cols.map(s => {
+  return `<div class="board" data-scroll-key="status-board:${ui.view}:${ui.track}">${cols.map(s => {
     const items = cards.filter(l => effStatus(l) === s);
     return `<div class="col" data-drop="${s}">
       <div class="col-head"><span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s}</span><span style="color:var(--muted)">${items.length}</span></div>
