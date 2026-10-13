@@ -28,7 +28,8 @@ create table if not exists public.initiatives (
 
 create table if not exists public.work_items (
   id            uuid        primary key default gen_random_uuid(),
-  initiative_id uuid        not null references public.initiatives (id) on delete cascade,
+  -- Restrict: an initiative can only be deleted once it has no tracks.
+  initiative_id uuid        not null references public.initiatives (id) on delete restrict,
   -- null = a top-level track; otherwise the item this one sits under.
   parent_id     uuid        references public.work_items (id) on delete cascade,
   name          text        not null check (length(trim(name)) > 0),
@@ -51,6 +52,12 @@ create table if not exists public.work_items (
     ('Thoughts','Pending User','Planning','Developing','IT Testing','User Testing','Completed','Void')),
   constraint work_items_not_own_parent check (parent_id is distinct from id)
 );
+
+-- Databases set up with an earlier version of this script deleted an initiative's
+-- tracks along with it. Switch that to "restrict" (safe to run repeatedly).
+alter table public.work_items drop constraint if exists work_items_initiative_id_fkey;
+alter table public.work_items add constraint work_items_initiative_id_fkey
+  foreign key (initiative_id) references public.initiatives (id) on delete restrict;
 
 create index if not exists work_items_initiative_id_idx on public.work_items (initiative_id);
 create index if not exists work_items_parent_id_idx     on public.work_items (parent_id);

@@ -361,6 +361,7 @@ function explain(err, doing) {
   if (code === '42501' || /row-level security/i.test(msg)) return `Could not ${doing}: your account has view-only access. Ask an editor to add your email to the editors list.`;
   if (code === 'PGRST301' || /JWT|expired/i.test(msg)) return `Could not ${doing}: your sign-in has expired. Sign out and sign in again.`;
   if (code === '42P01' || /does not exist|schema cache/i.test(msg)) return `Could not ${doing}: the database tables are missing. Run supabase/setup.sql in the Supabase SQL Editor.`;
+  if (code === '23503' && /initiative/i.test(msg)) return `Could not ${doing}: the initiative still has tracks. Delete them first.`;
   if (code === '23503') return `Could not ${doing}: it refers to an item that no longer exists. The page has been refreshed; please try again.`;
   if (code === '23514') return `Could not ${doing}: a value is not allowed (${msg}).`;
   return `Could not ${doing}${msg ? `: ${msg}` : '.'}`;
@@ -789,7 +790,7 @@ function render() {
         <button class="btn" data-act="export-xlsx">Export Excel</button>
         <button class="btn" data-act="backup">Backup</button>
         ${canEdit() ? `<button class="btn" data-act="restore">Restore</button>
-        ${cur ? `<button class="btn" data-act="edit-init" data-id="${cur.id}">Edit initiative</button>
+        ${cur ? `<button class="btn" data-act="edit-init" data-id="${cur.id}" title="Rename, reorder or delete this initiative">Edit initiative</button>
                  <button class="btn primary" data-act="add-item" data-init="${cur.id}">+ Add track</button>`
               : `<button class="btn primary" data-act="add-init">+ Add initiative</button>`}` : ''}
       </div>
@@ -856,7 +857,7 @@ function renderOverview(inits) {
             ${tr.map(t => { const ls = stats(leavesUnder(t)); return `<div class="trackrow"><span class="t"><span class="code">${codeOf(t)}</span>${esc(t.name)}</span><span class="c">${ls.done}/${ls.live}</span>${statusPill(effStatus(t))}</div>`; }).join('') || '<div class="empty">No tracks yet</div>'}
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            ${canEdit() ? `<button class="btn sm ghost" data-act="edit-init" data-id="${i.id}">Rename</button>` : ''}
+            ${canEdit() ? `<button class="btn sm ghost" data-act="edit-init" data-id="${i.id}" title="Rename, reorder or delete">Edit</button>` : ''}
             <button class="btn sm" data-act="view" data-view="${i.id}">Open ${esc(i.name)} →</button>
           </div>
         </div>`;
@@ -1164,35 +1165,48 @@ function itemModal({ id, initiativeId, parentId }) {
 
 function initModal(id) {
   const init = id ? IDX.initById.get(id) : null;
+  const tracks = init ? tracksOf(init.id) : [];
+  const linkedIn = init ? db.items.filter(i => i.initiativeId !== init.id && (i.links || []).includes(init.id)) : [];
+  const delNote = !init ? '' : tracks.length
+    ? `To delete this initiative, first delete its ${tracks.length} track${tracks.length === 1 ? '' : 's'}.`
+    : 'This initiative has no tracks, so it can be deleted.';
   openModal(`
     <header><h3>${init ? 'Edit initiative' : 'New initiative'}</h3><button class="btn ghost sm" data-close>✕</button></header>
     <div class="body">
-      <div class="field"><label>Name</label><input type="text" name="name" value="${esc(init?.name || '')}" placeholder="e.g. POLARIS"></div>
-      <div class="field"><label>Description</label><input type="text" name="description" value="${esc(init?.description || '')}" placeholder="Optional one-liner"></div>
+      <div class="field"><label for="initName">Name</label><input type="text" id="initName" name="name" value="${esc(init?.name || '')}" placeholder="e.g. POLARIS">
+        ${init ? '<div class="help">Renaming keeps all tracks, items, links and progress.</div>' : ''}</div>
+      <div class="field"><label for="initDesc">Description</label><input type="text" id="initDesc" name="description" value="${esc(init?.description || '')}" placeholder="Optional one-liner"></div>
+      <div class="help" data-err style="color:var(--danger)" hidden></div>
+      ${init ? `<div class="help" data-delnote>${delNote}</div>` : ''}
     </div>
     <footer>
-      <div style="display:flex;gap:6px">${init ? `<button class="btn sm danger" data-del>Delete initiative</button><button class="btn sm" data-move="-1" title="Move left">←</button><button class="btn sm" data-move="1" title="Move right">→</button>` : ''}</div>
+      <div style="display:flex;gap:6px">${init ? `<button class="btn sm danger" data-del ${tracks.length ? 'disabled title="Delete its tracks first"' : ''}>Delete initiative</button><button class="btn sm" data-move="-1" title="Move left">←</button><button class="btn sm" data-move="1" title="Move right">→</button>` : ''}</div>
       <div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>${init ? 'Save' : 'Create'}</button></div>
     </footer>`, bd => {
+    const err = m => { const e = bd.querySelector('[data-err]'); e.textContent = m; e.hidden = !m; };
     bd.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
     bd.querySelector('[data-save]').onclick = () => {
       const name = bd.querySelector('[name=name]').value.trim();
       const description = bd.querySelector('[name=description]').value.trim();
-      if (!name) { toast('Please enter a name.'); return; }
-      if (init) { Object.assign(init, { name, description }); commit({ inits: [init] }); }
+      if (!name) { err('Enter a name for the initiative.'); bd.querySelector('[name=name]').focus(); return; }
+      const clash = db.initiatives.find(i => i.id !== init?.id && i.name.trim().toLowerCase() === name.toLowerCase());
+      if (clash) { err(`An initiative called “${clash.name}” already exists. Choose a different name.`); return; }
+      if (init) { Object.assign(init, { name, description }); commit({ inits: [init] }); toast(`Saved ${name}.`); }
       else { const n = { id: uid(), name, description, order: db.initiatives.length ? Math.max(...db.initiatives.map(i => i.order ?? 0)) + 1 : 0, createdAt: new Date().toISOString() }; db.initiatives.push(n); commit({ inits: [n] }); ui.view = n.id; ui.track = 'all'; }
       saveUI(); closeModal(); render();
     };
     bd.querySelector('[data-del]')?.addEventListener('click', () => {
-      const n = db.items.filter(i => i.initiativeId === init.id).length;
-      confirmDialog(`Delete initiative “${init.name}” and its ${n} item${n === 1 ? '' : 's'}? This cannot be undone.`, 'Delete initiative', () => {
-        const delItems = db.items.filter(i => i.initiativeId === init.id).map(i => i.id);
+      // Re-check against the latest data: someone may have added a track meanwhile.
+      index();
+      const left = tracksOf(init.id).length;
+      if (left) { err(`“${init.name}” still has ${left} track${left === 1 ? '' : 's'}. Delete ${left === 1 ? 'it' : 'them'} first.`); return; }
+      const linkNote = linkedIn.length ? ` ${linkedIn.length} item${linkedIn.length === 1 ? '' : 's'} from other initiatives linked to it will be unlinked.` : '';
+      confirmDialog(`Delete initiative “${init.name}”? It has no tracks.${linkNote}`, 'Delete initiative', () => {
         db.initiatives = db.initiatives.filter(i => i.id !== init.id);
-        db.items = db.items.filter(i => i.initiativeId !== init.id);
         const relinked = db.items.filter(i => (i.links || []).includes(init.id));
-        relinked.forEach(i => { i.links = i.links.filter(l => l !== init.id); });
-        commit({ items: relinked, delItems, delInits: [init.id] });
-        ui.view = 'overview'; saveUI(); render();
+        relinked.forEach(i => { i.links = i.links.filter(l => l !== init.id); touch(i); });
+        commit({ items: relinked, delInits: [init.id] }).then(ok => { if (ok) toast(`Deleted ${init.name}.`); });
+        ui.view = 'overview'; ui.track = 'all'; saveUI(); render();
       }, () => initModal(init.id));
     });
     bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => {
