@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="seed.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <style>
   /* Layout: summary tiles on top, then a track sidebar beside a checklist / board work area. */
   :root {
@@ -68,6 +68,7 @@
     --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; }
   body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font); }
   button, input, select, textarea { font: inherit; color: inherit; }
@@ -75,6 +76,26 @@
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   .mode-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 6px; }
   .confirm-text { color: var(--ink-2); margin: 0; }
+  .userbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .userbar .who { color: var(--ink-2); font-weight: 500; }
+  .role { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 6px; }
+  .role.edit { background: var(--s-done-bg); color: var(--s-done-ink); }
+  .role.view { background: var(--tag-bg); color: var(--tag-ink); }
+  .error-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px 16px; background: var(--danger-soft); color: var(--danger); border-bottom: 1px solid var(--danger); font-size: 13.5px; }
+  .error-bar .msg { flex: 1; min-width: 0; font-weight: 500; }
+  .error-bar .btns { display: flex; gap: 6px; flex: none; }
+  .auth-wrap { min-height: 80vh; display: grid; place-items: center; padding-block: 40px; }
+  .auth-card { width: 100%; max-width: 400px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .auth-card h2 { margin: 0; font-size: 22px; }
+  .auth-card form { display: flex; flex-direction: column; gap: 14px; }
+  .auth-card .field input { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 9px 11px; background: var(--surface); }
+  .auth-brand { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+  .auth-sub { margin: 0; color: var(--muted); }
+  .auth-msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+  .auth-msg.error { background: var(--danger-soft); color: var(--danger); }
+  .auth-msg.ok { background: var(--s-done-bg); color: var(--s-done-ink); }
+  .btn.block { width: 100%; padding-block: 10px; }
+  .btn:disabled { opacity: .6; cursor: progress; }
   .wrap { max-width: 1440px; margin: 0 auto; padding: 24px 32px 64px; }
 
   /* Header + nav */
@@ -254,6 +275,10 @@
 </style>
 </head>
 <body>
+<div class="error-bar" id="errorBar" role="alert" hidden>
+  <span class="msg" data-msg></span>
+  <span class="btns"><button class="btn sm" data-retry hidden>Try again</button><button class="btn sm" onclick="hideError()">Dismiss</button></span>
+</div>
 <div class="wrap" id="app"></div>
 <input type="file" id="importFile" accept=".json,application/json" hidden>
 
@@ -264,7 +289,6 @@
    it between machines and "Export Excel" for reporting.
    ========================================================================= */
 
-const STORAGE_KEY = 'projectAHA.db.v1';
 const UI_KEY = 'projectAHA.ui.v1';
 
 // Order matters: lowest progress first. A parent shows the lowest status of its children.
@@ -274,15 +298,40 @@ const STATUS_META = Object.fromEntries(STATUSES.map(st => { const k = STATUS_KEY
 const RANK = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
 const isClosed = s => s === 'Completed' || s === 'Void';
 
-const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2));
+// Database ids are UUIDs; older browsers without randomUUID get an equivalent v4 id.
+const uid = () => crypto.randomUUID ? crypto.randomUUID()
+  : ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-/* ------------------------------------------------------------- storage */
-// Two modes. "shared": the hosted page keeps initiatives and items in its database,
-// one document each, so everyone with access sees the same live data.
-// "local": opened as a plain file, data stays in this browser's storage.
-let db = { version: 1, initiatives: [], items: [] }, ui;
-const store = { mode: 'loading', cdb: null, downloads: null, remote: { initiatives: [], items: [] }, got: { initiatives: false, items: false }, queue: Promise.resolve() };
+/* ------------------------------------------------------- supabase data */
+// All data lives in Supabase (tables: initiatives, work_items, editors).
+// Row Level Security there decides who can read and who can change data;
+// the page hides edit controls for non-editors to match.
+const SUPABASE_URL = 'https://qzspaffquemmqqznasit.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_G638JH1qE9C8DVc7Emv8Ow_Opvy5tO9'; // publishable key: safe in the browser
+const PAGE_SIZE = 1000;
+
+// Read the auth link details before supabase-js consumes the URL.
+const LINK = (() => {
+  const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const q = new URLSearchParams(location.search);
+  return {
+    type: h.get('type') || q.get('type') || '',
+    tokenHash: q.get('token_hash') || '',
+    error: h.get('error_description') || q.get('error_description') || '',
+    errorCode: h.get('error_code') || q.get('error_code') || '',
+  };
+})();
+
+let db = { initiatives: [], items: [] }, ui;
+const store = {
+  sb: null, session: null, isEditor: false, loaded: false, loading: false,
+  channel: null, live: 'off', queue: Promise.resolve(),
+};
+// Auth screen state: 'checking' | 'signin' | 'reset-sent' | 'set-password' | 'app'
+const auth = { screen: 'checking', message: '', messageKind: 'error', busy: false, emailHint: '' };
+const canEdit = () => store.isEditor;
 
 function loadUI() {
   try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
@@ -290,58 +339,276 @@ function loadUI() {
 }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
 
-function startLocal() {
-  store.mode = 'local';
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch {}
-  if (saved && Array.isArray(saved.initiatives) && Array.isArray(saved.items)) db = saved;
-  else if (window.ahaBuildSeed) { db = window.ahaBuildSeed(); saveLocal(); }
-  render();
-}
-function saveLocal() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
-  catch { toast('Could not save. Browser storage is full or blocked, so download a backup.'); }
+// Database rows use snake_case; the page uses camelCase.
+const fromInit = r => ({ id: r.id, name: r.name, description: r.description || '', order: r.sort_order ?? 0, createdAt: r.created_at });
+const toInit = x => ({ id: x.id, name: x.name, description: x.description || '', sort_order: x.order ?? 0 });
+const fromItem = r => ({
+  id: r.id, initiativeId: r.initiative_id, parentId: r.parent_id || null, name: r.name, status: r.status,
+  prevStatus: r.prev_status || undefined, deadline: r.deadline || '', owner: r.owner || '', notes: r.notes || '',
+  links: r.links || [], order: r.sort_order ?? 0, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+const toItem = x => ({
+  id: x.id, initiative_id: x.initiativeId, parent_id: x.parentId || null, name: x.name, status: x.status,
+  prev_status: x.prevStatus || null, deadline: x.deadline || null, owner: x.owner || '', notes: x.notes || '',
+  links: x.links || [], sort_order: x.order ?? 0,
+});
+
+// Turn a Supabase / network error into a sentence a person can act on.
+function explain(err, doing) {
+  const code = err && (err.code || err.status);
+  const msg = (err && (err.message || err.error_description)) || '';
+  if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(msg)) return `Could not ${doing}: no connection to the database. Check your internet connection and try again.`;
+  if (code === '42501' || /row-level security/i.test(msg)) return `Could not ${doing}: your account has view-only access. Ask an editor to add your email to the editors list.`;
+  if (code === 'PGRST301' || /JWT|expired/i.test(msg)) return `Could not ${doing}: your sign-in has expired. Sign out and sign in again.`;
+  if (code === '42P01' || /does not exist|schema cache/i.test(msg)) return `Could not ${doing}: the database tables are missing. Run supabase/setup.sql in the Supabase SQL Editor.`;
+  if (code === '23503') return `Could not ${doing}: it refers to an item that no longer exists. The page has been refreshed; please try again.`;
+  if (code === '23514') return `Could not ${doing}: a value is not allowed (${msg}).`;
+  return `Could not ${doing}${msg ? `: ${msg}` : '.'}`;
 }
 
-async function boot() {
-  loadUI();
-  if (!window.claude || typeof window.claude.use !== 'function') { startLocal(); return; }
-  render();
-  window.claude.use('downloads').then(d => { store.downloads = d; }).catch(() => {});
-  let cdb = null;
-  try { cdb = await window.claude.use('db'); } catch {}
-  if (!cdb) { startLocal(); return; }
-  store.cdb = cdb; store.mode = 'shared';
-  const listen = (name) => cdb.collection(name).onSnapshot(snap => {
-    store.remote[name] = snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }));
-    store.got[name] = true;
-    db[name] = store.remote[name].map(x => JSON.parse(JSON.stringify(x)));
+// Error banner sits outside #app so re-renders do not clear it.
+function showError(message, retry, kind = 'other') {
+  const bar = document.getElementById('errorBar');
+  bar.dataset.kind = kind;
+  bar.querySelector('[data-msg]').textContent = message;
+  const r = bar.querySelector('[data-retry]');
+  r.hidden = !retry; r.onclick = () => { hideError(); retry(); };
+  bar.hidden = false;
+}
+function hideError() { document.getElementById('errorBar').hidden = true; }
+
+async function fetchAll(table, order) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await store.sb.from(table).select('*').order(order).order('id').range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) return rows;
+  }
+}
+
+async function loadData({ quiet = false } = {}) {
+  if (!store.session) return;
+  store.loading = true;
+  if (!quiet) render();
+  try {
+    const [inits, items, editor] = await Promise.all([
+      fetchAll('initiatives', 'sort_order'),
+      fetchAll('work_items', 'sort_order'),
+      store.sb.rpc('is_editor'),
+    ]);
+    if (editor.error) throw editor.error;
+    db = { initiatives: inits.map(fromInit), items: items.map(fromItem) };
+    store.isEditor = editor.data === true;
+    store.loaded = true;
+    if (document.getElementById('errorBar').dataset.kind === 'load') hideError();
+  } catch (err) {
+    showError(explain(err, 'load the tracker'), () => loadData(), 'load');
+  } finally {
+    store.loading = false;
     render();
-  }, () => toast('Lost connection to the shared tracker. Reload the page to reconnect.'));
-  listen('initiatives'); listen('items');
+  }
 }
-const sharedReady = () => store.mode !== 'shared' || (store.got.initiatives && store.got.items);
 
-// Persist changes. Callers have already applied them to `db` for an instant update.
+// Apply one realtime change from another browser (or our own echo).
+function applyChange(table, payload) {
+  const key = table === 'initiatives' ? 'initiatives' : 'items';
+  const conv = table === 'initiatives' ? fromInit : fromItem;
+  if (payload.eventType === 'DELETE') {
+    const id = payload.old && payload.old.id;
+    if (!id) return;
+    db[key] = db[key].filter(x => x.id !== id);
+  } else {
+    const row = conv(payload.new);
+    const i = db[key].findIndex(x => x.id === row.id);
+    if (i >= 0) db[key][i] = row; else db[key].push(row);
+  }
+  scheduleRender();
+}
+let renderTimer;
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); }
+
+function subscribeLive() {
+  if (store.channel) store.sb.removeChannel(store.channel);
+  let wasDown = false;
+  store.channel = store.sb.channel('aha-tracker')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'initiatives' }, p => applyChange('initiatives', p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_items' }, p => applyChange('work_items', p))
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        store.live = 'on';
+        if (wasDown) loadData({ quiet: true }); // catch up on anything missed while disconnected
+        wasDown = false;
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        store.live = 'down'; wasDown = true;
+      } else if (status === 'CLOSED') {
+        store.live = 'off';
+      }
+      render();
+    });
+}
+
+// Persist changes. Callers have already applied them to `db` so the page updates instantly.
 function commit({ items = [], inits = [], delItems = [], delInits = [] } = {}) {
-  if (store.mode === 'local') { saveLocal(); return Promise.resolve(); }
-  if (store.mode !== 'shared') return Promise.resolve();
-  const plain = o => JSON.parse(JSON.stringify(o));
-  const ops = [
-    ...inits.map(x => () => store.cdb.collection('initiatives').doc(x.id).set(plain(x))),
-    ...items.map(x => () => store.cdb.collection('items').doc(x.id).set(plain(x))),
-    ...delItems.map(id => () => store.cdb.collection('items').doc(id).delete()),
-    ...delInits.map(id => () => store.cdb.collection('initiatives').doc(id).delete()),
-  ];
-  // One write at a time keeps documents consistent across quick edits.
+  if (!canEdit()) { toast('You have view-only access.'); return Promise.resolve(false); }
+  const sb = store.sb;
+  const depth = it => { let d = 0, p = it; const by = new Map(db.items.map(x => [x.id, x])); while (p && p.parentId && by.has(p.parentId) && d < 64) { d++; p = by.get(p.parentId); } return d; };
+  const chunks = (arr, n = 500) => arr.length ? Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n)) : [];
+  const ops = [];
+  chunks(inits).forEach(c => ops.push(() => sb.from('initiatives').upsert(c.map(toInit))));
+  // Parents before children so the parent reference always exists.
+  chunks([...items].sort((a, b) => depth(a) - depth(b))).forEach(c => ops.push(() => sb.from('work_items').upsert(c.map(toItem))));
+  chunks(delItems).forEach(c => ops.push(() => sb.from('work_items').delete().in('id', c)));
+  chunks(delInits).forEach(c => ops.push(() => sb.from('initiatives').delete().in('id', c)));
+  // One request at a time keeps quick successive edits in order.
   store.queue = store.queue.then(async () => {
-    for (const op of ops) await op();
+    for (const op of ops) { const { error } = await op(); if (error) throw error; }
+    return true;
   }).catch(err => {
-    db = { version: 1, initiatives: plain(store.remote.initiatives), items: plain(store.remote.items) };
-    render();
-    toast(err && err.code === 'invalid_argument' ? 'Your access is view-only, so this change was not saved.' : err && err.code === 'quota_exceeded' ? 'The tracker is full. Delete old items to add new ones.' : 'Could not save that change. Please try again.');
+    showError(explain(err, 'save your change') + ' Your last change was not saved; the page now shows what is stored.', null);
+    loadData({ quiet: true });
+    return false;
   });
   return store.queue;
+}
+
+/* ---------------------------------------------------------------- auth */
+async function initAuth() {
+  loadUI();
+  if (!window.supabase || !window.supabase.createClient) {
+    auth.screen = 'signin';
+    auth.message = 'Could not load the sign-in library. Check your internet connection (or any network filter blocking cdn.jsdelivr.net) and reload the page.';
+    render(); return;
+  }
+  store.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+
+  store.sb.auth.onAuthStateChange((event, session) => {
+    store.session = session;
+    if (event === 'PASSWORD_RECOVERY') { auth.screen = 'set-password'; render(); return; }
+    if (event === 'SIGNED_OUT') { enterSignedOut(); return; }
+    // Supabase calls this handler while holding its auth lock: defer further calls.
+    if (event === 'SIGNED_IN' && auth.screen === 'signin') setTimeout(enterApp, 0);
+  });
+
+  try {
+    if (LINK.tokenHash && LINK.type) {
+      const { error } = await store.sb.auth.verifyOtp({ token_hash: LINK.tokenHash, type: LINK.type });
+      if (error) throw error;
+    }
+    const { data, error } = await store.sb.auth.getSession();
+    if (error) throw error;
+    store.session = data.session;
+  } catch (err) {
+    store.session = null;
+    auth.message = linkErrorText(err.message);
+  }
+  if (LINK.error) auth.message = linkErrorText(LINK.error);
+
+  if (store.session && (LINK.type === 'invite' || LINK.type === 'recovery')) { auth.screen = 'set-password'; render(); }
+  else if (store.session) enterApp();
+  else { auth.screen = 'signin'; render(); }
+}
+function linkErrorText(msg) {
+  if (/expired|invalid/i.test(msg || '') || LINK.errorCode === 'otp_expired') return 'This link has expired or was already used. Ask an editor for a new invitation, or use “Forgot password?” below.';
+  return `That link did not work: ${msg}`;
+}
+function cleanUrl() { history.replaceState(null, '', location.pathname); }
+
+function enterApp() {
+  cleanUrl();
+  auth.screen = 'app'; auth.message = '';
+  loadData();
+  subscribeLive();
+}
+function enterSignedOut() {
+  if (store.channel) { store.sb.removeChannel(store.channel); store.channel = null; }
+  store.session = null; store.isEditor = false; store.loaded = false; store.live = 'off';
+  db = { initiatives: [], items: [] };
+  hideError(); closeModal();
+  auth.screen = 'signin';
+  render();
+}
+async function signOut() {
+  const { error } = await store.sb.auth.signOut();
+  if (error) toast(explain(error, 'sign out'));
+  enterSignedOut();
+}
+
+function authHTML() {
+  const msg = auth.message ? `<div class="auth-msg ${auth.messageKind}" role="alert">${esc(auth.message)}</div>` : '';
+  const dis = auth.busy ? 'disabled' : '';
+  let body;
+  if (auth.screen === 'checking') {
+    body = `<p class="auth-sub">Checking your sign-in…</p>`;
+  } else if (auth.screen === 'set-password') {
+    const email = store.session?.user?.email || '';
+    body = `
+      <h2>Set your password</h2>
+      <p class="auth-sub">${LINK.type === 'invite' ? 'Welcome to the Project AHA tracker. Choose a password to finish setting up your account' : 'Choose a new password'}${email ? ` for <b>${esc(email)}</b>` : ''}.</p>
+      ${msg}
+      <form id="authForm" data-form="set-password" novalidate>
+        <div class="field"><label for="newPassword">New password</label><input type="password" id="newPassword" autocomplete="new-password" minlength="8" required></div>
+        <div class="field"><label for="confirmPassword">Confirm password</label><input type="password" id="confirmPassword" autocomplete="new-password" minlength="8" required>
+          <div class="help">At least 8 characters.</div></div>
+        <button class="btn primary block" type="submit" ${dis}>${auth.busy ? 'Saving…' : 'Save password and continue'}</button>
+      </form>`;
+  } else if (auth.screen === 'reset-sent') {
+    body = `
+      <h2>Check your email</h2>
+      <p class="auth-sub">If <b>${esc(auth.emailHint)}</b> has an account, a password reset link is on its way. Open it on this device to choose a new password.</p>
+      <button class="btn block" data-auth="back">Back to sign in</button>`;
+  } else {
+    body = `
+      <h2>Sign in</h2>
+      <p class="auth-sub">Project AHA finance transformation tracker. Access is by invitation.</p>
+      ${msg}
+      <form id="authForm" data-form="signin" novalidate>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="username" value="${esc(auth.emailHint)}" required></div>
+        <div class="field"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required></div>
+        <button class="btn primary block" type="submit" ${dis}>${auth.busy ? 'Signing in…' : 'Sign in'}</button>
+      </form>
+      <button class="btn ghost block" data-auth="forgot" ${dis}>Forgot password?</button>`;
+  }
+  return `<div class="auth-wrap"><div class="card auth-card"><div class="auth-brand">Project AHA</div>${body}</div></div>`;
+}
+
+async function handleAuthSubmit(form) {
+  const kind = form.dataset.form;
+  const say = (m, k = 'error') => { auth.message = m; auth.messageKind = k; auth.busy = false; render(); };
+  if (kind === 'signin') {
+    const email = form.querySelector('#email').value.trim(), password = form.querySelector('#password').value;
+    auth.emailHint = email;
+    if (!email || !password) return say('Enter your email and password.');
+    auth.busy = true; auth.message = ''; render();
+    const { error } = await store.sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      const m = /invalid login/i.test(error.message) ? 'Email or password is incorrect.'
+        : /not confirmed/i.test(error.message) ? 'This email has not been confirmed yet. Open the invitation email first.'
+        : explain(error, 'sign in');
+      return say(m);
+    }
+    auth.busy = false; // onAuthStateChange moves on to the dashboard
+  } else if (kind === 'set-password') {
+    const p1 = form.querySelector('#newPassword').value, p2 = form.querySelector('#confirmPassword').value;
+    if (p1.length < 8) return say('Use at least 8 characters.');
+    if (p1 !== p2) return say('The two passwords do not match.');
+    auth.busy = true; auth.message = ''; render();
+    const { error } = await store.sb.auth.updateUser({ password: p1 });
+    if (error) return say(/same/i.test(error.message) ? 'Choose a password different from your current one.' : explain(error, 'save your password'));
+    auth.busy = false;
+    toast('Password saved.');
+    enterApp();
+  }
+}
+async function forgotPassword() {
+  const email = (document.getElementById('email')?.value || '').trim();
+  auth.emailHint = email;
+  if (!email) { auth.message = 'Enter your email above, then choose “Forgot password?”.'; auth.messageKind = 'error'; render(); return; }
+  auth.busy = true; render();
+  const { error } = await store.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  auth.busy = false;
+  if (error) { auth.message = explain(error, 'send the reset email'); auth.messageKind = 'error'; render(); return; }
+  auth.screen = 'reset-sent'; auth.message = ''; render();
 }
 
 /* --------------------------------------------------------- derivations */
@@ -478,12 +745,23 @@ const statusPill = s => { const m = STATUS_META[s] || STATUS_META.Thoughts; retu
 function statusSelect(item) {
   const s = effStatus(item), m = STATUS_META[s];
   const derived = hasKids(item);
-  return `<select class="status" data-act="status" data-id="${item.id}" style="background:${m.bg};color:${m.ink}" ${derived ? 'disabled title="Rolled up from sub-items — change a sub-item to update"' : ''}>
+  return `<select class="status" data-act="status" data-id="${item.id}" style="background:${m.bg};color:${m.ink}" ${derived ? 'disabled title="Rolled up from sub-items — change a sub-item to update"' : !canEdit() ? 'disabled title="View only"' : ''}>
     ${STATUSES.map(x => `<option ${x === s ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
 }
 const dueChip = item => { const d = dueInfo(item); return d ? `<span class="due ${d.cls}" title="Deadline ${esc(fmtDate(effDeadline(item).date))}">${esc(d.text)}</span>` : ''; };
 
 function render() {
+  const appEl = document.getElementById('app');
+  if (auth.screen !== 'app') {
+    const had = document.activeElement && appEl.contains(document.activeElement) ? document.activeElement.id : '';
+    // Keep what the person typed when the form re-renders with a message.
+    const typed = Object.fromEntries([...appEl.querySelectorAll('input[id]')].map(i => [i.id, i.value]));
+    appEl.innerHTML = authHTML();
+    Object.entries(typed).forEach(([id, v]) => { const i = document.getElementById(id); if (i && v) i.value = v; });
+    const f = (had && document.getElementById(had)) || [...appEl.querySelectorAll('input')].find(i => !i.value);
+    if (f) f.focus();
+    return;
+  }
   index();
   if (ui.view !== 'overview' && !IDX.initById.has(ui.view)) { ui.view = 'overview'; ui.track = 'all'; }
   const app = document.getElementById('app');
@@ -495,23 +773,28 @@ function render() {
   app.innerHTML = `
     <div class="top">
       <div><h1>${title}</h1><div class="sub">${subtitle}</div>
-        <div class="mode-note">${store.mode === 'shared' ? '<span class="dot" style="background:var(--s-done)"></span>Shared tracker · changes save for everyone with access' : store.mode === 'local' ? '<span class="dot" style="background:var(--s-pending)"></span>Saved in this browser only · use Backup to move data' : '<span class="dot" style="background:var(--faint)"></span>Connecting…'}</div></div>
+        <div class="userbar">
+          <span class="who">${esc(store.session?.user?.email || '')}</span>
+          ${store.loaded ? (canEdit() ? '<span class="role edit">Editor</span>' : '<span class="role view" title="Ask an editor to add your email to the editors list to make changes">View only</span>') : ''}
+          <span class="mode-note" style="margin:0">${store.live === 'on' ? '<span class="dot" style="background:var(--s-done)"></span>Live' : store.live === 'down' ? '<span class="dot" style="background:var(--s-pending)"></span>Live updates paused, reconnecting…' : '<span class="dot" style="background:var(--faint)"></span>Connecting…'}</span>
+          <button class="btn sm ghost" data-act="sign-out">Sign out</button>
+        </div></div>
       <div class="actions">
         <button class="btn" data-act="export-xlsx">Export Excel</button>
         <button class="btn" data-act="backup">Backup</button>
-        <button class="btn" data-act="restore">Restore</button>
+        ${canEdit() ? `<button class="btn" data-act="restore">Restore</button>
         ${cur ? `<button class="btn" data-act="edit-init" data-id="${cur.id}">Edit initiative</button>
                  <button class="btn primary" data-act="add-item" data-init="${cur.id}">+ Add track</button>`
-              : `<button class="btn primary" data-act="add-init">+ Add initiative</button>`}
+              : `<button class="btn primary" data-act="add-init">+ Add initiative</button>`}` : ''}
       </div>
     </div>
     <nav class="tabs">
       <button class="tab ${!cur ? 'active' : ''}" data-act="view" data-view="overview">Project AHA overview</button>
       ${inits.map(i => `<button class="tab ${cur && cur.id === i.id ? 'active' : ''}" data-act="view" data-view="${i.id}">${esc(i.name)}<span class="n">${leavesOfInit(i.id).length}</span></button>`).join('')}
-      <button class="tab add" data-act="add-init">+ New initiative</button>
+      ${canEdit() ? '<button class="tab add" data-act="add-init">+ New initiative</button>' : ''}
     </nav>
-    ${!sharedReady() || store.mode === 'loading' ? '<div class="card empty" style="padding:48px">Loading Project AHA…</div>' : `
-    ${!inits.length ? '<div class="banner info">No initiatives yet. Use “+ Add initiative” to create the first one (for example ORION), then add its tracks and items.</div>' : ''}
+    ${!store.loaded ? `<div class="card empty" style="padding:48px">${store.loading ? 'Loading Project AHA…' : 'The tracker could not be loaded. See the message above.'}</div>` : `
+    ${!inits.length ? `<div class="banner info">${canEdit() ? 'No initiatives yet. Use “+ Add initiative” to create the first one (for example ORION), then add its tracks and items.' : 'No initiatives yet. An editor needs to add them.'}</div>` : ''}
     ${cur ? renderInitiativeHeader(cur) : renderOverview(inits)}
     ${renderWork(cur)}`}
   `;
@@ -567,19 +850,19 @@ function renderOverview(inits) {
             ${tr.map(t => { const ls = stats(leavesUnder(t)); return `<div class="trackrow"><span class="t"><span class="code">${codeOf(t)}</span>${esc(t.name)}</span><span class="c">${ls.done}/${ls.live}</span>${statusPill(effStatus(t))}</div>`; }).join('') || '<div class="empty">No tracks yet</div>'}
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn sm ghost" data-act="edit-init" data-id="${i.id}">Rename</button>
+            ${canEdit() ? `<button class="btn sm ghost" data-act="edit-init" data-id="${i.id}">Rename</button>` : ''}
             <button class="btn sm" data-act="view" data-view="${i.id}">Open ${esc(i.name)} →</button>
           </div>
         </div>`;
       }).join('')}
-      <button class="card init add" data-act="add-init">+ Add new initiative</button>
+      ${canEdit() ? '<button class="card init add" data-act="add-init">+ Add new initiative</button>' : ''}
     </div>
     <div class="section-title"><h2>Status mix & deadlines</h2><span class="meta">Today: ${fmtDate(stamp())}</span></div>
     <div class="grid-2">
       ${distribution(leaves)}
       <div class="card dl">
         <div style="padding:6px 18px 8px;font-weight:600">Overdue & due in next 14 days</div>
-        ${upcoming.length ? upcoming.map(({ l }) => `<div class="dl-item" data-act="edit-item" data-id="${l.id}"><div><div class="nm">${esc(l.name)}</div><div class="path">${esc(pathText(l))}</div></div>${dueChip(l)}</div>`).join('')
+        ${upcoming.length ? upcoming.map(({ l }) => `<div class="dl-item" ${canEdit() ? `data-act="edit-item" data-id="${l.id}"` : 'style="cursor:default"'}><div><div class="nm">${esc(l.name)}</div><div class="path">${esc(pathText(l))}</div></div>${dueChip(l)}</div>`).join('')
           : '<div class="empty">No open items due in the next 14 days. Set deadlines from the checklist or the Edit dialog.</div>'}
       </div>
     </div>
@@ -609,7 +892,7 @@ function renderWork(cur) {
       <button class="side-item ${ui.track === 'all' ? 'active' : ''}" data-act="track" data-id="all"><span class="lbl">All ${cur ? 'tracks' : 'initiatives'}</span><span class="n">${scopeLeaves.length}</span></button>
       ${sideEntries.map(e => `<button class="side-item ${ui.track === e.id ? 'active' : ''}" data-act="track" data-id="${e.id}" title="${esc(e.label)} — ${esc(e.status || '')}">
         <span class="dot" style="background:${e.status ? STATUS_META[e.status].color : 'var(--border-strong)'}"></span><span class="lbl">${esc(e.label)}</span><span class="n">${e.count}</span></button>`).join('')}
-      ${cur ? `<button class="side-item" style="color:var(--primary)" data-act="add-item" data-init="${cur.id}">+ Add track</button>` : ''}
+      ${cur && canEdit() ? `<button class="side-item" style="color:var(--primary)" data-act="add-item" data-init="${cur.id}">+ Add track</button>` : ''}
       <div class="foot">
         <div style="font-weight:700;letter-spacing:.1em;font-size:11px">COMPLETION</div>
         <div class="big">${st.pct}%</div>
@@ -666,7 +949,7 @@ function rowHTML(item, depth, opts = {}) {
   const fromTag = opts.linkedFrom ? `<span class="tag">From ${esc(opts.linkedFrom)}</span>` : '';
   return `<div class="row ${depth === 0 ? 'track' : ''} ${closed ? 'done' : ''}" style="margin-left:${depth * 28}px">
     <button class="toggle ${kids ? '' : 'blank'}" data-act="collapse" data-id="${item.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▶' : '▼'}</button>
-    <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : ''}>
+    <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : !canEdit() ? 'disabled' : ''}>
     <div class="main">
       <div class="name"><span class="code">${opts.linkedFrom ? '' : (depth === 0 ? 'Track ' : '')}${codeOf(item)}</span>${esc(item.name)}</div>
       <div class="meta-line">
@@ -680,10 +963,10 @@ function rowHTML(item, depth, opts = {}) {
     </div>
     <div class="right">
       ${dueChip(item)}
-      <input type="date" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline">
+      <input type="date" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline" ${canEdit() ? '' : 'disabled'}>
       ${statusSelect(item)}
-      <button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
-      <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button>
+      ${canEdit() ? `<button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
+      <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button>` : ''}
     </div>
   </div>`;
 }
@@ -724,18 +1007,18 @@ function renderBoard(cur) {
   }
   leaves = leaves.filter(matches);
   const cols = STATUSES.filter(s => !(ui.hideDone && isClosed(s)) && (ui.status === 'all' || ui.status === s));
-  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${leaves.length} work item${leaves.length === 1 ? '' : 's'} · drag cards to change status`; });
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${leaves.length} work item${leaves.length === 1 ? '' : 's'} ${canEdit() ? ' · drag cards to change status' : ''}`; });
   return `<div class="board">${cols.map(s => {
     const items = leaves.filter(l => effStatus(l) === s);
     return `<div class="col" data-drop="${s}">
       <div class="col-head"><span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s}</span><span style="color:var(--muted)">${items.length}</span></div>
-      ${items.map(l => `<div class="bcard ${isClosed(s) ? 'done' : ''}" draggable="true" data-drag="${l.id}">
+      ${items.map(l => `<div class="bcard ${isClosed(s) ? 'done' : ''}" ${canEdit() ? `draggable="true" data-drag="${l.id}"` : 'style="cursor:default"'}>
         <div style="display:flex;gap:8px;justify-content:space-between;align-items:flex-start">
           <div class="name"><span class="code">${codeOf(l)}</span>${esc(l.name)}</div>
-          <input type="checkbox" class="cb" data-act="done" data-id="${l.id}" ${s === 'Completed' ? 'checked' : ''}>
+          <input type="checkbox" class="cb" data-act="done" data-id="${l.id}" ${s === 'Completed' ? 'checked' : ''} ${canEdit() ? '' : 'disabled'}>
         </div>
         <div class="path">${esc(pathText(l))}${l.initiativeId !== cur?.id && cur ? ' <span class="tag">linked</span>' : ''}${(l.links || []).filter(x => x !== l.initiativeId).map(x => IDX.initById.get(x)).filter(Boolean).map(x => ` <span class="tag link">↔ ${esc(x.name)}</span>`).join('')}</div>
-        <div class="foot">${statusSelect(l)}${dueChip(l)}<button class="btn sm" data-act="edit-item" data-id="${l.id}">Edit</button></div>
+        <div class="foot">${statusSelect(l)}${dueChip(l)}${canEdit() ? `<button class="btn sm" data-act="edit-item" data-id="${l.id}">Edit</button>` : ''}</div>
       </div>`).join('')}
     </div>`;
   }).join('')}</div>`;
@@ -925,15 +1208,7 @@ function summaryRows() {
   return rows;
 }
 function stamp() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
-async function download(name, blob) {
-  if (store.downloads) {
-    try { await store.downloads.save({ filename: name, data: blob }); }
-    catch (e) { if (e && e.code !== 'declined') toast('This view cannot save files. Open the tracker in a browser to download.'); }
-    return;
-  }
-  downloadLink(name, blob);
-}
-function downloadLink(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 function exportExcel() {
   index();
   const items = rowsForExport(), summary = summaryRows();
@@ -960,17 +1235,23 @@ function backup() { download(`Project_AHA_backup_${stamp()}.json`, new Blob([JSO
 function restore(file) {
   const r = new FileReader();
   r.onload = () => {
+    let data;
     try {
-      const data = JSON.parse(r.result);
+      data = JSON.parse(r.result);
       if (!Array.isArray(data.initiatives) || !Array.isArray(data.items)) throw new Error('bad shape');
-      confirmDialog(`Replace all current data with this backup (${data.initiatives.length} initiatives, ${data.items.length} items)?${store.mode === 'shared' ? ' This changes the tracker for everyone.' : ''}`, 'Replace data', () => {
-        const delItems = db.items.map(i => i.id).filter(id => !data.items.some(x => x.id === id));
-        const delInits = db.initiatives.map(i => i.id).filter(id => !data.initiatives.some(x => x.id === id));
-        db = { version: 1, initiatives: data.initiatives, items: data.items };
-        commit({ inits: data.initiatives, items: data.items, delItems, delInits }).then(() => toast('Backup restored.'));
-        ui.view = 'overview'; ui.track = 'all'; saveUI(); render();
-      });
-    } catch { toast('That file is not a valid Project AHA backup.'); }
+    } catch { showError('That file is not a valid Project AHA backup. Choose a .json file made with the Backup button.'); return; }
+    confirmDialog(`Replace all current data with this backup (${data.initiatives.length} initiatives, ${data.items.length} items)? This changes the tracker for everyone.`, 'Replace data', async () => {
+      // Backups from before the move to Supabase used short ids like "orion"; give those new UUIDs.
+      const ids = new Map();
+      const map = id => (id == null || id === '') ? null : isUuid(id) ? id : (ids.has(id) ? ids.get(id) : (ids.set(id, uid()), ids.get(id)));
+      const inits = data.initiatives.map(x => ({ ...x, id: map(x.id) }));
+      const items = data.items.map(x => ({ ...x, id: map(x.id), initiativeId: map(x.initiativeId), parentId: map(x.parentId), links: (x.links || []).map(map) }));
+      const delInits = db.initiatives.map(i => i.id).filter(id => !inits.some(x => x.id === id));
+      const delItems = db.items.map(i => i.id).filter(id => !items.some(x => x.id === id));
+      db = { initiatives: inits, items };
+      ui.view = 'overview'; ui.track = 'all'; saveUI(); render();
+      if (await commit({ delItems, delInits, inits, items })) toast('Backup restored.');
+    });
   };
   r.readAsText(file);
 }
@@ -980,9 +1261,14 @@ function toast(msg) { document.querySelector('.toast')?.remove(); const t = docu
 
 /* --------------------------------------------------------------- events */
 const app = document.getElementById('app');
+const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore']);
 app.addEventListener('click', e => {
+  const authBtn = e.target.closest('[data-auth]');
+  if (authBtn) { if (authBtn.dataset.auth === 'forgot') forgotPassword(); else { auth.screen = 'signin'; auth.message = ''; render(); } return; }
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act;
+  if (EDIT_ACTIONS.has(a) && !canEdit()) return;
+  if (a === 'sign-out') { signOut(); return; }
   if (a === 'view') { ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'track') { ui.track = el.dataset.id; saveUI(); render(); }
   else if (a === 'mode') { ui.mode = el.dataset.mode; saveUI(); render(); }
@@ -995,8 +1281,10 @@ app.addEventListener('click', e => {
   else if (a === 'backup') backup();
   else if (a === 'restore') document.getElementById('importFile').click();
 });
+app.addEventListener('submit', e => { e.preventDefault(); if (e.target.id === 'authForm' && !auth.busy) handleAuthSubmit(e.target); });
 app.addEventListener('change', e => {
   const el = e.target; const a = el.dataset.act; if (!a) return;
+  if ((a === 'status' || a === 'deadline' || a === 'done') && !canEdit()) { render(); return; }
   if (a === 'status') setStatus(el.dataset.id, el.value);
   else if (a === 'deadline') setDeadline(el.dataset.id, el.value);
   else if (a === 'done') toggleDone(el.dataset.id, el.checked);
@@ -1014,16 +1302,16 @@ app.addEventListener('input', e => {
   }, 200);
 });
 // Board drag & drop
-app.addEventListener('dragstart', e => { const c = e.target.closest('[data-drag]'); if (!c) return; e.dataTransfer.setData('text/plain', c.dataset.drag); c.classList.add('dragging'); });
+app.addEventListener('dragstart', e => { if (!canEdit()) return; const c = e.target.closest('[data-drag]'); if (!c) return; e.dataTransfer.setData('text/plain', c.dataset.drag); c.classList.add('dragging'); });
 app.addEventListener('dragend', e => e.target.closest?.('[data-drag]')?.classList.remove('dragging'));
 app.addEventListener('dragover', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); app.querySelectorAll('.col.over').forEach(c => c !== col && c.classList.remove('over')); col.classList.add('over'); });
 app.addEventListener('dragleave', e => { const col = e.target.closest('[data-drop]'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
-app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) setStatus(id, col.dataset.drop); });
+app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id && canEdit()) setStatus(id, col.dataset.drop); });
 
 document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-boot();
+initAuth();
 </script>
 </body>
 </html>
