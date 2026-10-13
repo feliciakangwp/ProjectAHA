@@ -219,7 +219,7 @@
   .row .name { font-weight: 600; }
   .row.track .name { font-size: 15.5px; }
   .meta-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
-  .tag { font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--tag-bg); color: var(--tag-ink); font-weight: 500; }
+  .tag { white-space: nowrap; display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--tag-bg); color: var(--tag-ink); font-weight: 500; }
   .tag.link { background: var(--info-soft); color: var(--info-ink); }
   .tag.derived { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
   .row .right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -738,6 +738,12 @@ function moveItem(id, dir) {
   sibs.forEach((s, k) => s.order = k);
   commit({ items: sibs }); render();
 }
+function unlinkItem(id, initId) {
+  const item = IDX.byId.get(id); if (!item) return;
+  item.links = (item.links || []).filter(l => l !== initId);
+  touch(item); commit({ items: [item] }); render();
+  toast(`Unlinked ${codeOf(item)} ${item.name}.`);
+}
 function nextOrder(initId, parentId) { const sibs = parentId ? childrenOf(parentId) : tracksOf(initId); return sibs.length ? Math.max(...sibs.map(s => s.order ?? 0)) + 1 : 0; }
 
 /* -------------------------------------------------------------- render */
@@ -965,19 +971,33 @@ function rowHTML(item, depth, opts = {}) {
       ${dueChip(item)}
       <input type="date" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline" ${canEdit() ? '' : 'disabled'}>
       ${statusSelect(item)}
+      ${canEdit() && opts.unlinkFrom ? `<button class="btn sm ghost" data-act="unlink" data-id="${item.id}" data-init="${opts.unlinkFrom}" title="Stop showing this item here">Unlink</button>` : ''}
       ${canEdit() ? `<button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
       <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button>` : ''}
     </div>
   </div>`;
 }
 
+// Items from other initiatives linked into `cur`. If an item and one of its
+// ancestors are both linked, only the ancestor is listed (its subtree covers it).
+function linkedRoots(cur) {
+  const linkedHere = i => (i.links || []).includes(cur.id) && i.initiativeId !== cur.id;
+  return db.items.filter(i => linkedHere(i) && !ancestors(i).some(linkedHere))
+    .sort((a, b) => (a.initiativeId + codeOf(a)).localeCompare(b.initiativeId + codeOf(b), undefined, { numeric: true }));
+}
+// The linked item (itself or an ancestor) that brings `item` into initiative `initId`, if any.
+function linkSource(item, initId) {
+  if (item.initiativeId === initId) return null;
+  return [item, ...ancestors(item).reverse()].find(x => (x.links || []).includes(initId)) || null;
+}
+
 function renderChecklist(cur) {
   const memo = new Map();
   let shown = 0;
-  const walk = (item, depth) => {
+  const walk = (item, depth, opts) => {
     if (!visible(item, memo)) return '';
     shown++;
-    let html = rowHTML(item, depth);
+    let html = rowHTML(item, depth, opts);
     if (!ui.collapsed.includes(item.id) || filtersActive()) html += childrenOf(item.id).map(c => walk(c, depth + 1)).join('');
     return html;
   };
@@ -985,8 +1005,9 @@ function renderChecklist(cur) {
   if (cur) {
     html = rootsInScope(cur).map(t => `<div class="group">${walk(t, 0)}</div>`).join('');
     if (ui.track === 'all') {
-      const linked = db.items.filter(i => (i.links || []).includes(cur.id) && i.initiativeId !== cur.id && visible(i, memo));
-      if (linked.length) html += `<div class="init-label">Linked from other initiatives</div>` + linked.map(l => { shown++; return rowHTML(l, 0, { linkedFrom: IDX.initById.get(l.initiativeId)?.name || 'another initiative', path: pathText(l) }); }).join('');
+      const linked = linkedRoots(cur).filter(i => visible(i, memo));
+      if (linked.length) html += `<div class="init-label">Linked from other initiatives</div>` + linked.map(l =>
+        `<div class="group">${walk(l, 0, { linkedFrom: IDX.initById.get(l.initiativeId)?.name || 'another initiative', path: pathText(l), unlinkFrom: cur.id })}</div>`).join('');
     }
   } else {
     html = initiatives().filter(i => ui.track === 'all' || i.id === ui.track).map(i => {
@@ -999,29 +1020,44 @@ function renderChecklist(cur) {
 }
 
 function renderBoard(cur) {
-  // Board cards are the lowest-level work items; parents are rolled up and shown in the checklist.
-  let leaves = rootsInScope(cur).flatMap(leavesUnder);
+  // Every work item gets a card, including items that have sub-items (shown with their
+  // rolled-up status). Tracks that have sub-items are left out: the sidebar and
+  // checklist already show them, and their sub-items are on the board.
+  const onBoard = i => !(hasKids(i) && !i.parentId);
+  const withSubtree = i => [i, ...descendants(i)];
+  let cards = rootsInScope(cur).flatMap(withSubtree).filter(onBoard);
   if (cur && ui.track === 'all') {
-    const linked = db.items.filter(i => (i.links || []).includes(cur.id) && i.initiativeId !== cur.id).flatMap(leavesUnder);
-    leaves = [...leaves, ...linked.filter(l => !leaves.includes(l))];
+    const seen = new Set(cards);
+    // A linked item always gets its own card, even a track, so it can be unlinked here.
+    linkedRoots(cur).forEach(l => withSubtree(l).forEach(x => { if (!seen.has(x) && (x === l || onBoard(x))) { seen.add(x); cards.push(x); } }));
   }
-  leaves = leaves.filter(matches);
+  cards = cards.filter(matches);
   const cols = STATUSES.filter(s => !(ui.hideDone && isClosed(s)) && (ui.status === 'all' || ui.status === s));
-  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${leaves.length} work item${leaves.length === 1 ? '' : 's'} ${canEdit() ? ' · drag cards to change status' : ''}`; });
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cards.length} card${cards.length === 1 ? '' : 's'}${canEdit() ? ' · drag cards to change status' : ''}`; });
   return `<div class="board">${cols.map(s => {
-    const items = leaves.filter(l => effStatus(l) === s);
+    const items = cards.filter(l => effStatus(l) === s);
     return `<div class="col" data-drop="${s}">
       <div class="col-head"><span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s}</span><span style="color:var(--muted)">${items.length}</span></div>
-      ${items.map(l => `<div class="bcard ${isClosed(s) ? 'done' : ''}" ${canEdit() ? `draggable="true" data-drag="${l.id}"` : 'style="cursor:default"'}>
-        <div style="display:flex;gap:8px;justify-content:space-between;align-items:flex-start">
-          <div class="name"><span class="code">${codeOf(l)}</span>${esc(l.name)}</div>
-          <input type="checkbox" class="cb" data-act="done" data-id="${l.id}" ${s === 'Completed' ? 'checked' : ''} ${canEdit() ? '' : 'disabled'}>
-        </div>
-        <div class="path">${esc(pathText(l))}${l.initiativeId !== cur?.id && cur ? ' <span class="tag">linked</span>' : ''}${(l.links || []).filter(x => x !== l.initiativeId).map(x => IDX.initById.get(x)).filter(Boolean).map(x => ` <span class="tag link">↔ ${esc(x.name)}</span>`).join('')}</div>
-        <div class="foot">${statusSelect(l)}${dueChip(l)}${canEdit() ? `<button class="btn sm" data-act="edit-item" data-id="${l.id}">Edit</button>` : ''}</div>
-      </div>`).join('')}
+      ${items.map(l => cardHTML(l, s, cur)).join('')}
     </div>`;
   }).join('')}</div>`;
+}
+
+function cardHTML(l, s, cur) {
+  const kids = hasKids(l);
+  const ls = kids ? stats(leavesUnder(l)) : null;
+  const src = cur ? linkSource(l, cur.id) : null;
+  const draggable = canEdit() && !kids; // a parent's status comes from its sub-items
+  const linkTags = (l.links || []).filter(x => x !== l.initiativeId).map(x => IDX.initById.get(x)).filter(Boolean).map(x => ` <span class="tag link">↔ ${esc(x.name)}</span>`).join('');
+  const linkedTag = src ? (src === l ? ' <span class="tag">linked</span>' : ` <span class="tag" title="Shown here because ${esc(codeOf(src))} is linked">via ${esc(codeOf(src))}</span>`) : '';
+  return `<div class="bcard ${isClosed(s) ? 'done' : ''}" ${draggable ? `draggable="true" data-drag="${l.id}"` : 'style="cursor:default"'}>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:flex-start">
+      <div class="name"><span class="code">${codeOf(l)}</span>${esc(l.name)}</div>
+      <input type="checkbox" class="cb" data-act="done" data-id="${l.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'}>
+    </div>
+    <div class="path">${esc(pathText(l))}${linkedTag}${linkTags}${kids ? ` <span class="tag derived" title="Status rolled up from sub-items">${ls.done}/${ls.live} sub-items done</span>` : ''}</div>
+    <div class="foot">${statusSelect(l)}${dueChip(l)}${canEdit() ? `${src === l ? `<button class="btn sm ghost" data-act="unlink" data-id="${l.id}" data-init="${cur.id}" title="Stop showing this item in ${esc(cur.name)}">Unlink</button>` : ''}<button class="btn sm" data-act="edit-item" data-id="${l.id}">Edit</button>` : ''}</div>
+  </div>`;
 }
 
 /* --------------------------------------------------------------- modals */
@@ -1080,7 +1116,8 @@ function itemModal({ id, initiativeId, parentId }) {
       <div class="field"><label>Owner</label><input type="text" name="owner" value="${esc(item?.owner || '')}" placeholder="Optional"></div>
       <div class="field"><label>Notes</label><textarea name="notes" placeholder="Optional">${esc(item?.notes || '')}</textarea></div>
       ${others.length ? `<div class="field"><label>Also linked to initiative</label><div class="checks">${others.map(o => `<label><input type="checkbox" name="links" value="${o.id}" ${(item?.links || []).includes(o.id) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('')}</div>
-        <div class="help">Linked items also appear in that initiative’s checklist and board.</div></div>` : ''}
+        <div class="help">Linked items, with their sub-items, also appear in that initiative’s checklist and board.</div>
+        ${item ? others.map(o => { const src = ancestors(item).reverse().find(x => (x.links || []).includes(o.id)); return src ? `<div class="help">Also shown in ${esc(o.name)} because its parent ${esc(codeOf(src))} ${esc(src.name)} is linked. Unlink ${esc(codeOf(src))} to remove it there.</div>` : ''; }).join('') : ''}</div>` : ''}
     </div>
     <footer>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1261,7 +1298,7 @@ function toast(msg) { document.querySelector('.toast')?.remove(); const t = docu
 
 /* --------------------------------------------------------------- events */
 const app = document.getElementById('app');
-const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore']);
+const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore', 'unlink']);
 app.addEventListener('click', e => {
   const authBtn = e.target.closest('[data-auth]');
   if (authBtn) { if (authBtn.dataset.auth === 'forgot') forgotPassword(); else { auth.screen = 'signin'; auth.message = ''; render(); } return; }
@@ -1275,6 +1312,7 @@ app.addEventListener('click', e => {
   else if (a === 'collapse') { const id = el.dataset.id; ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter(x => x !== id) : [...ui.collapsed, id]; saveUI(); render(); }
   else if (a === 'add-item') itemModal({ initiativeId: el.dataset.init, parentId: el.dataset.parent });
   else if (a === 'edit-item') itemModal({ id: el.dataset.id });
+  else if (a === 'unlink') unlinkItem(el.dataset.id, el.dataset.init);
   else if (a === 'add-init') initModal();
   else if (a === 'edit-init') initModal(el.dataset.id);
   else if (a === 'export-xlsx') exportExcel();
@@ -1306,7 +1344,7 @@ app.addEventListener('dragstart', e => { if (!canEdit()) return; const c = e.tar
 app.addEventListener('dragend', e => e.target.closest?.('[data-drag]')?.classList.remove('dragging'));
 app.addEventListener('dragover', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); app.querySelectorAll('.col.over').forEach(c => c !== col && c.classList.remove('over')); col.classList.add('over'); });
 app.addEventListener('dragleave', e => { const col = e.target.closest('[data-drop]'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
-app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id && canEdit()) setStatus(id, col.dataset.drop); });
+app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id && canEdit() && IDX.byId.has(id) && !hasKids(IDX.byId.get(id))) setStatus(id, col.dataset.drop); });
 
 document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
