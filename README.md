@@ -18,5 +18,7 @@ Open `index.html` in a browser — no install or server needed.
 - **Export Excel** (Summary, all work items, one sheet per initiative), **Backup / Restore** as JSON.
 
 ## Data
-Data is saved in the browser's local storage (per browser, per computer).
-Use **Backup** to save a JSON file and **Restore** to load it on another machine or share it.
+- **Hosted (shared) version:** https://claude.ai/artifact/LZdG1LX3kfk6e9nrVUvzEP. Data lives in the page's
+  shared database, so everyone the page is shared with sees the same, live tracker.
+- **Opened as a local file:** data is saved in that browser's local storage, starting from `seed.js`.
+  Use **Backup** to save a JSON file and **Restore** to load it on another machine or into the hosted version.

@@ -4,41 +4,98 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project AHA Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="seed.js"></script>
 <style>
+  /* Layout: summary tiles on top, then a track sidebar beside a checklist / board work area. */
   :root {
-    --bg: #f1f5f9; --surface: #ffffff; --surface-2: #f8fafc; --border: #e2e8f0; --border-strong: #cbd5e1;
-    --ink: #0f172a; --ink-2: #334155; --muted: #64748b; --faint: #94a3b8;
-    --primary: #2563eb; --primary-ink: #ffffff; --primary-soft: #eff6ff;
-    --danger: #b91c1c; --danger-soft: #fef2f2; --warn: #b45309; --warn-soft: #fffbeb; --ok: #047857; --ok-soft: #ecfdf5;
-    --radius: 12px; --shadow: 0 1px 2px rgba(15,23,42,.05);
+    --bg: #eef2f6; --surface: #ffffff; --surface-2: #f6f8fb; --border: #dfe5ec; --border-strong: #c5cfdb;
+    --ink: #0f1b2d; --ink-2: #33415a; --muted: #5f6d82; --faint: #8f9bad;
+    --primary: #1f5fd6; --primary-ink: #ffffff; --primary-soft: #eaf1fd;
+    --inverse: #0f1b2d; --inverse-ink: #ffffff; --inverse-muted: #b9c4d3;
+    --danger: #b42318; --danger-soft: #fdf0ee; --warn: #a15c07; --warn-soft: #fef7e6; --warn-line: #f5d58a;
+    --info-soft: #ecf8f6; --info-ink: #13574f; --info-line: #a6dfd6;
+    --tag-bg: #edf0fb; --tag-ink: #33408f; --track: #e2e8ef; --col: #e6ecf3;
+    --s-thoughts: #64748b; --s-thoughts-bg: #eef1f5; --s-thoughts-ink: #475569;
+    --s-pending: #d97706; --s-pending-bg: #fef6e7; --s-pending-ink: #a15c07;
+    --s-planning: #0891b2; --s-planning-bg: #e8f8fb; --s-planning-ink: #0e6a85;
+    --s-dev: #ea580c; --s-dev-bg: #fff2e8; --s-dev-ink: #b8430b;
+    --s-it: #2563eb; --s-it-bg: #ebf2fe; --s-it-ink: #1d4ed8;
+    --s-ut: #7c3aed; --s-ut-bg: #f3effe; --s-ut-ink: #6d28d9;
+    --s-done: #047857; --s-done-bg: #e8f7f0; --s-done-ink: #047857;
+    --s-void: #a8a29e; --s-void-bg: #f3f2f1; --s-void-ink: #78716c;
+    --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --radius: 12px; --shadow: 0 1px 2px rgba(15,27,45,.06);
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0d141f; --surface: #151e2b; --surface-2: #1b2636; --border: #283547; --border-strong: #3a4a60;
+    --ink: #e8eef6; --ink-2: #c3cedc; --muted: #93a1b5; --faint: #6c7a8f;
+    --primary: #5b93f5; --primary-ink: #0b1220; --primary-soft: #1a2a45;
+    --inverse: #e8eef6; --inverse-ink: #0d141f; --inverse-muted: #4b5a70;
+    --danger: #f2877b; --danger-soft: #3a1c1a; --warn: #f0b75a; --warn-soft: #33270f; --warn-line: #5c4615;
+    --info-soft: #11302c; --info-ink: #8adbd0; --info-line: #1f5149;
+    --tag-bg: #242c4a; --tag-ink: #b4bef0; --track: #283547; --col: #111a26;
+    --s-thoughts: #94a3b8; --s-thoughts-bg: #232e3d; --s-thoughts-ink: #b8c3d1;
+    --s-pending: #f0a33a; --s-pending-bg: #35270f; --s-pending-ink: #f5bf6a;
+    --s-planning: #2fb8d8; --s-planning-bg: #0f2f38; --s-planning-ink: #7dd6ea;
+    --s-dev: #f57b3a; --s-dev-bg: #3a2113; --s-dev-ink: #fba277;
+    --s-it: #5b93f5; --s-it-bg: #182a4a; --s-it-ink: #9cbcf8;
+    --s-ut: #a07cf3; --s-ut-bg: #2a1f47; --s-ut-ink: #c4adf8;
+    --s-done: #34b383; --s-done-bg: #10332a; --s-done-ink: #6fd3ab;
+    --s-void: #8a8580; --s-void-bg: #262422; --s-void-ink: #a9a49f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #0d141f; --surface: #151e2b; --surface-2: #1b2636; --border: #283547; --border-strong: #3a4a60;
+    --ink: #e8eef6; --ink-2: #c3cedc; --muted: #93a1b5; --faint: #6c7a8f;
+    --primary: #5b93f5; --primary-ink: #0b1220; --primary-soft: #1a2a45;
+    --inverse: #e8eef6; --inverse-ink: #0d141f; --inverse-muted: #4b5a70;
+    --danger: #f2877b; --danger-soft: #3a1c1a; --warn: #f0b75a; --warn-soft: #33270f; --warn-line: #5c4615;
+    --info-soft: #11302c; --info-ink: #8adbd0; --info-line: #1f5149;
+    --tag-bg: #242c4a; --tag-ink: #b4bef0; --track: #283547; --col: #111a26;
+    --s-thoughts: #94a3b8; --s-thoughts-bg: #232e3d; --s-thoughts-ink: #b8c3d1;
+    --s-pending: #f0a33a; --s-pending-bg: #35270f; --s-pending-ink: #f5bf6a;
+    --s-planning: #2fb8d8; --s-planning-bg: #0f2f38; --s-planning-ink: #7dd6ea;
+    --s-dev: #f57b3a; --s-dev-bg: #3a2113; --s-dev-ink: #fba277;
+    --s-it: #5b93f5; --s-it-bg: #182a4a; --s-it-ink: #9cbcf8;
+    --s-ut: #a07cf3; --s-ut-bg: #2a1f47; --s-ut-ink: #c4adf8;
+    --s-done: #34b383; --s-done-bg: #10332a; --s-done-ink: #6fd3ab;
+    --s-void: #8a8580; --s-void-bg: #262422; --s-void-ink: #a9a49f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font); }
   button, input, select, textarea { font: inherit; color: inherit; }
   button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .mode-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .confirm-text { color: var(--ink-2); margin: 0; }
   .wrap { max-width: 1440px; margin: 0 auto; padding: 24px 32px 64px; }
 
   /* Header + nav */
   .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; text-wrap: balance; }
+  h1, h2, h3 { text-wrap: balance; }
   .sub { color: var(--muted); margin-top: 4px; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 14px; white-space: nowrap; }
   .btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
   .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
   .btn.primary:hover { filter: brightness(1.08); }
-  .btn.dark { background: var(--ink); border-color: var(--ink); color: #fff; }
-  .btn.sm { padding: 4px 10px; font-size: 13px; border-radius: 7px; }
+    .btn.sm { padding: 4px 10px; font-size: 13px; border-radius: 7px; }
   .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
   .btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
   .btn.danger { color: var(--danger); }
   .tabs { display: flex; gap: 6px; margin: 20px 0 18px; flex-wrap: wrap; align-items: center; }
   .tab { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 7px 16px; font-weight: 500; }
-  .tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tab.active { background: var(--inverse); color: var(--inverse-ink); border-color: var(--inverse); }
   .tab .n { color: var(--faint); font-size: 12px; margin-left: 6px; }
-  .tab.active .n { color: #cbd5e1; }
+  .tab.active .n { color: var(--inverse-muted); }
   .tab.add { border-style: dashed; color: var(--primary); }
 
   /* KPI cards */
@@ -47,11 +104,12 @@
   .kpi { padding: 18px 20px; }
   .kpi.hero { border: 2px solid var(--primary); }
   .kpi .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 6px; }
-  .kpi .val { font-size: 30px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.02em; }
+  .kpi .val { font-family: var(--mono); font-size: 30px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.02em; }
   .kpi .hint { font-size: 12px; color: var(--muted); }
   .kpi .val.bad { color: var(--danger); }
 
-  .banner { margin: 16px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid #fde68a; background: var(--warn-soft); color: #92400e; font-size: 13px; }
+  .banner.info { border-color: var(--info-line); background: var(--info-soft); color: var(--info-ink); }
+  .banner { margin: 16px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--warn); font-size: 13px; }
 
   /* Status */
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
@@ -78,8 +136,8 @@
   .init-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
   .init-head h3 { margin: 0; font-size: 17px; }
   .init-head .desc { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-  .bar { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
-  .bar > div { height: 100%; background: #047857; border-radius: 999px; }
+  .bar { height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--s-done); border-radius: 999px; }
   .prog-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
   .prog-row b { color: var(--ink); }
   .tracklist { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
@@ -87,7 +145,7 @@
   .trackrow:last-child { border-bottom: 0; }
   .trackrow .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .trackrow .c { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .code { color: var(--faint); font-variant-numeric: tabular-nums; font-weight: 600; margin-right: 6px; }
+  .code { color: var(--faint); font-family: var(--mono); font-size: .92em; font-weight: 600; margin-right: 6px; }
   .init.add { align-items: center; justify-content: center; border-style: dashed; color: var(--primary); min-height: 160px; cursor: pointer; background: transparent; }
   .dl { padding: 8px 0; }
   .dl-item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
@@ -123,7 +181,7 @@
   .toolbar label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
   .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); }
   .seg button { border: 0; background: transparent; padding: 8px 16px; }
-  .seg button.on { background: var(--ink); color: #fff; }
+  .seg button.on { background: var(--inverse); color: var(--inverse-ink); }
   .work-head { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0 10px; gap: 10px; }
   .work-head h3 { margin: 0; font-size: 18px; }
   .work-head .meta { color: var(--muted); font-size: 13px; }
@@ -140,19 +198,19 @@
   .row .name { font-weight: 600; }
   .row.track .name { font-size: 15.5px; }
   .meta-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
-  .tag { font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: #eef2ff; color: #3730a3; font-weight: 500; }
-  .tag.link { background: #f0fdfa; color: #115e59; }
+  .tag { font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--tag-bg); color: var(--tag-ink); font-weight: 500; }
+  .tag.link { background: var(--info-soft); color: var(--info-ink); }
   .tag.derived { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
   .row .right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .row input[type=date] { border: 1px solid var(--border); border-radius: 7px; padding: 3px 6px; font-size: 12.5px; background: var(--surface); color: var(--ink-2); }
-  .cb { width: 20px; height: 20px; accent-color: #047857; flex: none; }
+  .cb { width: 20px; height: 20px; accent-color: var(--s-done); flex: none; }
   .toggle { width: 22px; height: 22px; border: 0; background: transparent; color: var(--muted); border-radius: 6px; flex: none; font-size: 12px; padding: 0; }
   .toggle:hover { background: var(--surface-2); }
   .toggle.blank { visibility: hidden; }
 
   /* Board */
   .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
-  .col { background: #e8eef5; border-radius: 12px; padding: 10px; min-height: 240px; }
+  .col { background: var(--col); border-radius: 12px; padding: 10px; min-height: 240px; }
   .col.over { outline: 2px dashed var(--primary); outline-offset: -2px; }
   .col-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; padding: 4px 4px 10px; }
   .col-head span { display: inline-flex; gap: 6px; align-items: center; }
@@ -178,7 +236,7 @@
   .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
   .checks label { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; margin: 0; }
 
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--inverse); color: var(--inverse-ink); padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
 
   @media (max-width: 960px) {
     .work { grid-template-columns: 1fr; }
@@ -211,127 +269,80 @@ const UI_KEY = 'projectAHA.ui.v1';
 
 // Order matters: lowest progress first. A parent shows the lowest status of its children.
 const STATUSES = ['Thoughts', 'Pending User', 'Planning', 'Developing', 'IT Testing', 'User Testing', 'Completed', 'Void'];
-const STATUS_META = {
-  'Thoughts':     { color: '#64748b', bg: '#f1f5f9', ink: '#475569', hint: 'Idea stage' },
-  'Pending User': { color: '#d97706', bg: '#fffbeb', ink: '#b45309', hint: 'Waiting on users' },
-  'Planning':     { color: '#0891b2', bg: '#ecfeff', ink: '#0e7490', hint: 'Scoping & design' },
-  'Developing':   { color: '#ea580c', bg: '#fff7ed', ink: '#c2410c', hint: 'Build & clarify' },
-  'IT Testing':   { color: '#2563eb', bg: '#eff6ff', ink: '#1d4ed8', hint: 'Internal validation' },
-  'User Testing': { color: '#7c3aed', bg: '#f5f3ff', ink: '#6d28d9', hint: 'User validation' },
-  'Completed':    { color: '#047857', bg: '#ecfdf5', ink: '#047857', hint: 'Released' },
-  'Void':         { color: '#a8a29e', bg: '#f5f5f4', ink: '#78716c', hint: 'Dropped' },
-};
+const STATUS_KEY = { 'Thoughts': 'thoughts', 'Pending User': 'pending', 'Planning': 'planning', 'Developing': 'dev', 'IT Testing': 'it', 'User Testing': 'ut', 'Completed': 'done', 'Void': 'void' };
+const STATUS_META = Object.fromEntries(STATUSES.map(st => { const k = STATUS_KEY[st]; return [st, { color: `var(--s-${k})`, bg: `var(--s-${k}-bg)`, ink: `var(--s-${k}-ink)` }]; }));
 const RANK = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
 const isClosed = s => s === 'Completed' || s === 'Void';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-/* ------------------------------------------------------------------ seed */
-function buildSeed() {
-  const now = new Date().toISOString();
-  const db = { version: 1, initiatives: [], items: [] };
-  const addInit = (name, description) => {
-    const it = { id: uid(), name, description, order: db.initiatives.length, createdAt: now };
-    db.initiatives.push(it); return it.id;
-  };
-  // Adds an item; `children` is an array of [name, status, children?] tuples.
-  const addItem = (initiativeId, parentId, name, status, children, order) => {
-    const item = { id: uid(), initiativeId, parentId, name, status: status || 'Thoughts', deadline: '', owner: '', notes: '', links: [], order, createdAt: now, updatedAt: now };
-    db.items.push(item);
-    (children || []).forEach((c, i) => addItem(initiativeId, item.id, c[0], c[1], c[2], i));
-    return item.id;
-  };
-  const addTracks = (initId, tracks) => tracks.map((t, i) => addItem(initId, null, t[0], t[1], t[2], i));
-
-  const orion = addInit('ORION', 'Budgeting, projection & utilisation platform');
-  const polaris = addInit('POLARIS', 'Debt management, fees & reconciliation');
-  const payment = addInit('Payment Transformation', 'End-to-end payment process redesign');
-
-  addTracks(orion, [
-    ['Medium Term Projection (MTP)', null, [
-      ['Recalculation of SOF', 'IT Testing'],
-      ['MTP Variance after refactoring', 'IT Testing'],
-      ['MTP Broken Linkage (Mainstreaming)', 'Developing'],
-    ]],
-    ['Annual Budget', null, [
-      ['When to port Annual Budget line over to MTP (after Fin Supported?)', 'Planning'],
-      ['Include column in Raw Report: Budgeted amount after DY Supported, before Clarification', 'Planning'],
-    ]],
-    ['Block Budget', null, [
-      ['Refactoring of Block Budget', 'Developing'],
-      ['Block Budget Raw Report', 'IT Testing'],
-      ['Block Budget Report', 'IT Testing'],
-      ['Block Budget Variance Report', 'IT Testing'],
-      ['Block Budget Projection Parameter', 'Developing'],
-    ]],
-    ['Expenditure & Utilisation', null, [
-      ['Uploading of Expenditure GL', 'User Testing'],
-      ['Calculation of Project Utilisation', 'User Testing'],
-      ['Calculation of individual line utilisation', 'Pending User'],
-      ['Provide expenditure access to specific Branch Rep (tag to BR Account)', 'Developing'],
-      ['AOR', 'User Testing'],
-    ]],
-    ['Dashboard', null, [
-      ['Outstanding To Do Items', 'IT Testing'],
-      ['Project Budget', 'IT Testing'],
-      ['Project Expenditure & Utilisation', 'IT Testing'],
-      ['Individual lines budget by Branch', 'Thoughts'],
-      ['Individual lines Expenditure & Utilisation', 'Thoughts'],
-      ['Customisation of Tables', 'Thoughts'],
-      ['ServiceNow Error Issue', 'Developing'],
-    ]],
-    ['Post Feedback Iterations', null, [
-      ['Email Notification', 'Planning'],
-      ['Force Refresh of Page', 'Developing'],
-      ['Shift view for Reviewers and Approvals', 'Planning'],
-      ['Justification of Variance Link', 'Developing'],
-    ]],
-  ]);
-
-  const [debt] = addTracks(polaris, [
-    ['Debt Management', null, [
-      ['Pulling of data on Debt Records', 'Thoughts'],
-      ['List of Debt Records', null, [
-        ['List of Debt Records', 'Completed'],
-        ['Debtor Report', 'Completed'],
-        ['Arrears Report', 'Completed'],
-        ['Written Off Report', 'Completed'],
-        ['To Be Written Off Report', 'Completed'],
-        ['Call for Return', 'Completed'],
-      ]],
-      ['Payments', 'Thoughts', [
-        ['Monthly Giro deduction', 'Thoughts'],
-      ]],
-      ['Reconciliation', 'Thoughts'],
-      ['Debt Management Dashboard', 'Thoughts'],
-    ]],
-    ['Fees & Maintenance', 'Thoughts'],
-    ['Reconciliation', 'Thoughts'],
-  ]);
-  // POLARIS 1c Payments is also relevant to Payment Transformation.
-  const payments = db.items.find(i => i.parentId === debt && i.name === 'Payments');
-  if (payments) payments.links = [payment];
-
-  addTracks(payment, [
-    ['Payment before Permit Approval', 'Pending User'],
-  ]);
-  return db;
-}
-
 /* ------------------------------------------------------------- storage */
-let db, ui;
-function load() {
-  try { db = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { db = null; }
-  if (!db || !Array.isArray(db.initiatives) || !Array.isArray(db.items)) { db = buildSeed(); save(); }
+// Two modes. "shared": the hosted page keeps initiatives and items in its database,
+// one document each, so everyone with access sees the same live data.
+// "local": opened as a plain file, data stays in this browser's storage.
+let db = { version: 1, initiatives: [], items: [] }, ui;
+const store = { mode: 'loading', cdb: null, downloads: null, remote: { initiatives: [], items: [] }, got: { initiatives: false, items: false }, queue: Promise.resolve() };
+
+function loadUI() {
   try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
   ui = Object.assign({ view: 'overview', track: 'all', mode: 'checklist', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [] }, ui);
 }
-function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
-  catch (e) { toast('Could not save — browser storage is full or blocked. Download a backup.'); }
-}
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
+
+function startLocal() {
+  store.mode = 'local';
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch {}
+  if (saved && Array.isArray(saved.initiatives) && Array.isArray(saved.items)) db = saved;
+  else if (window.ahaBuildSeed) { db = window.ahaBuildSeed(); saveLocal(); }
+  render();
+}
+function saveLocal() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+  catch { toast('Could not save. Browser storage is full or blocked, so download a backup.'); }
+}
+
+async function boot() {
+  loadUI();
+  if (!window.claude || typeof window.claude.use !== 'function') { startLocal(); return; }
+  render();
+  window.claude.use('downloads').then(d => { store.downloads = d; }).catch(() => {});
+  let cdb = null;
+  try { cdb = await window.claude.use('db'); } catch {}
+  if (!cdb) { startLocal(); return; }
+  store.cdb = cdb; store.mode = 'shared';
+  const listen = (name) => cdb.collection(name).onSnapshot(snap => {
+    store.remote[name] = snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }));
+    store.got[name] = true;
+    db[name] = store.remote[name].map(x => JSON.parse(JSON.stringify(x)));
+    render();
+  }, () => toast('Lost connection to the shared tracker. Reload the page to reconnect.'));
+  listen('initiatives'); listen('items');
+}
+const sharedReady = () => store.mode !== 'shared' || (store.got.initiatives && store.got.items);
+
+// Persist changes. Callers have already applied them to `db` for an instant update.
+function commit({ items = [], inits = [], delItems = [], delInits = [] } = {}) {
+  if (store.mode === 'local') { saveLocal(); return Promise.resolve(); }
+  if (store.mode !== 'shared') return Promise.resolve();
+  const plain = o => JSON.parse(JSON.stringify(o));
+  const ops = [
+    ...inits.map(x => () => store.cdb.collection('initiatives').doc(x.id).set(plain(x))),
+    ...items.map(x => () => store.cdb.collection('items').doc(x.id).set(plain(x))),
+    ...delItems.map(id => () => store.cdb.collection('items').doc(id).delete()),
+    ...delInits.map(id => () => store.cdb.collection('initiatives').doc(id).delete()),
+  ];
+  // One write at a time keeps documents consistent across quick edits.
+  store.queue = store.queue.then(async () => {
+    for (const op of ops) await op();
+  }).catch(err => {
+    db = { version: 1, initiatives: plain(store.remote.initiatives), items: plain(store.remote.items) };
+    render();
+    toast(err && err.code === 'invalid_argument' ? 'Your access is view-only, so this change was not saved.' : err && err.code === 'quota_exceeded' ? 'The tracker is full. Delete old items to add new ones.' : 'Could not save that change. Please try again.');
+  });
+  return store.queue;
+}
 
 /* --------------------------------------------------------- derivations */
 // Rebuilt on every render so that parents always reflect their children.
@@ -436,9 +447,9 @@ function touch(item) { item.updatedAt = new Date().toISOString(); }
 function setStatus(id, status) {
   const item = IDX.byId.get(id); if (!item) return;
   if (status === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status;
-  item.status = status; touch(item); save(); render();
+  item.status = status; touch(item); commit({ items: [item] }); render();
 }
-function setDeadline(id, date) { const item = IDX.byId.get(id); if (!item) return; item.deadline = date; touch(item); save(); render(); }
+function setDeadline(id, date) { const item = IDX.byId.get(id); if (!item) return; item.deadline = date; touch(item); commit({ items: [item] }); render(); }
 function toggleDone(id, checked) {
   const item = IDX.byId.get(id); if (!item) return;
   if (checked) setStatus(id, 'Completed');
@@ -449,7 +460,7 @@ function deleteItem(id) {
   const gone = new Set([id, ...descendants(item).map(d => d.id)]);
   db.items = db.items.filter(i => !gone.has(i.id));
   if (ui.track && gone.has(ui.track)) ui.track = 'all';
-  save(); render();
+  commit({ delItems: [...gone] }); render();
 }
 function moveItem(id, dir) {
   const item = IDX.byId.get(id); if (!item) return;
@@ -458,7 +469,7 @@ function moveItem(id, dir) {
   if (j < 0 || j >= sibs.length) return;
   [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
   sibs.forEach((s, k) => s.order = k);
-  save(); render();
+  commit({ items: sibs }); render();
 }
 function nextOrder(initId, parentId) { const sibs = parentId ? childrenOf(parentId) : tracksOf(initId); return sibs.length ? Math.max(...sibs.map(s => s.order ?? 0)) + 1 : 0; }
 
@@ -483,7 +494,8 @@ function render() {
 
   app.innerHTML = `
     <div class="top">
-      <div><h1>${title}</h1><div class="sub">${subtitle}</div></div>
+      <div><h1>${title}</h1><div class="sub">${subtitle}</div>
+        <div class="mode-note">${store.mode === 'shared' ? '<span class="dot" style="background:var(--s-done)"></span>Shared tracker · changes save for everyone with access' : store.mode === 'local' ? '<span class="dot" style="background:var(--s-pending)"></span>Saved in this browser only · use Backup to move data' : '<span class="dot" style="background:var(--faint)"></span>Connecting…'}</div></div>
       <div class="actions">
         <button class="btn" data-act="export-xlsx">Export Excel</button>
         <button class="btn" data-act="backup">Backup</button>
@@ -498,8 +510,10 @@ function render() {
       ${inits.map(i => `<button class="tab ${cur && cur.id === i.id ? 'active' : ''}" data-act="view" data-view="${i.id}">${esc(i.name)}<span class="n">${leavesOfInit(i.id).length}</span></button>`).join('')}
       <button class="tab add" data-act="add-init">+ New initiative</button>
     </nav>
+    ${!sharedReady() || store.mode === 'loading' ? '<div class="card empty" style="padding:48px">Loading Project AHA…</div>' : `
+    ${!inits.length ? '<div class="banner info">No initiatives yet. Use “+ Add initiative” to create the first one (for example ORION), then add its tracks and items.</div>' : ''}
     ${cur ? renderInitiativeHeader(cur) : renderOverview(inits)}
-    ${renderWork(cur)}
+    ${renderWork(cur)}`}
   `;
 }
 
@@ -509,7 +523,7 @@ function kpiCards(leaves, heroLabel) {
   const overdue = open.filter(l => { const n = daysUntil(l.deadline); return n !== null && n < 0; }).length;
   const soon = open.filter(l => { const n = daysUntil(l.deadline); return n !== null && n >= 0 && n <= 7; }).length;
   const groups = [
-    ['Early stage', ['Thoughts', 'Pending User', 'Planning'], 'Thoughts · Pending user · Planning', '#64748b'],
+    ['Early stage', ['Thoughts', 'Pending User', 'Planning'], 'Thoughts · Pending user · Planning', 'var(--s-thoughts)'],
     ['Developing', ['Developing'], 'Build & clarify', STATUS_META.Developing.color],
     ['Testing', ['IT Testing', 'User Testing'], `IT ${st.counts['IT Testing']} · User ${st.counts['User Testing']}`, STATUS_META['IT Testing'].color],
     ['Completed', ['Completed'], st.counts.Void ? `${st.counts.Void} void (excluded)` : 'Released', STATUS_META.Completed.color],
@@ -575,7 +589,7 @@ function renderOverview(inits) {
 function renderInitiativeHeader(init) {
   const linked = db.items.filter(i => (i.links || []).includes(init.id) && i.initiativeId !== init.id);
   return `${kpiCards(leavesOfInit(init.id), init.name + ' progress')}
-    ${linked.length ? `<div class="banner" style="border-color:#99f6e4;background:#f0fdfa;color:#115e59">${linked.length} item${linked.length > 1 ? 's' : ''} from other initiatives ${linked.length > 1 ? 'are' : 'is'} linked here (shown at the bottom of the checklist; not counted in this initiative’s progress).</div>` : ''}
+    ${linked.length ? `<div class="banner info">${linked.length} item${linked.length > 1 ? 's' : ''} from other initiatives ${linked.length > 1 ? 'are' : 'is'} linked here (shown at the bottom of the checklist; not counted in this initiative’s progress).</div>` : ''}
     <div style="height:20px"></div>`;
 }
 
@@ -594,7 +608,7 @@ function renderWork(cur) {
       <h4>${cur ? 'TRACKS' : 'INITIATIVES'}</h4>
       <button class="side-item ${ui.track === 'all' ? 'active' : ''}" data-act="track" data-id="all"><span class="lbl">All ${cur ? 'tracks' : 'initiatives'}</span><span class="n">${scopeLeaves.length}</span></button>
       ${sideEntries.map(e => `<button class="side-item ${ui.track === e.id ? 'active' : ''}" data-act="track" data-id="${e.id}" title="${esc(e.label)} — ${esc(e.status || '')}">
-        <span class="dot" style="background:${e.status ? STATUS_META[e.status].color : '#cbd5e1'}"></span><span class="lbl">${esc(e.label)}</span><span class="n">${e.count}</span></button>`).join('')}
+        <span class="dot" style="background:${e.status ? STATUS_META[e.status].color : 'var(--border-strong)'}"></span><span class="lbl">${esc(e.label)}</span><span class="n">${e.count}</span></button>`).join('')}
       ${cur ? `<button class="side-item" style="color:var(--primary)" data-act="add-item" data-init="${cur.id}">+ Add track</button>` : ''}
       <div class="foot">
         <div style="font-weight:700;letter-spacing:.1em;font-size:11px">COMPLETION</div>
@@ -739,6 +753,16 @@ function openModal(html, onMount) {
   const f = bd.querySelector('input[type=text]'); f && f.focus();
 }
 function closeModal() { document.getElementById('modal')?.remove(); }
+function confirmDialog(message, okLabel, onOk, onCancel) {
+  openModal(`
+    <header><h3>Please confirm</h3></header>
+    <div class="body"><p class="confirm-text">${esc(message)}</p></div>
+    <footer><span></span><div style="display:flex;gap:8px"><button class="btn" data-no>Cancel</button><button class="btn primary" data-yes>${esc(okLabel)}</button></div></footer>`, bd => {
+    bd.querySelector('[data-no]').onclick = () => { closeModal(); onCancel && onCancel(); };
+    bd.querySelector('[data-yes]').onclick = () => { closeModal(); onOk(); };
+    bd.querySelector('[data-yes]').focus();
+  });
+}
 
 function itemModal({ id, initiativeId, parentId }) {
   const item = id ? IDX.byId.get(id) : null;
@@ -801,16 +825,18 @@ function itemModal({ id, initiativeId, parentId }) {
         Object.assign(item, { name, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links });
         if (!kids) { const ns = q('status').value; if (ns === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status; item.status = ns; }
         touch(item);
+        commit({ items: [item] });
       } else {
         const now = new Date().toISOString();
-        db.items.push({ id: uid(), initiativeId: initId, parentId: newParent, name, status: q('status').value, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links, order: nextOrder(initId, newParent), createdAt: now, updatedAt: now });
+        const created = { id: uid(), initiativeId: initId, parentId: newParent, name, status: q('status').value, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links, order: nextOrder(initId, newParent), createdAt: now, updatedAt: now };
+        db.items.push(created); commit({ items: [created] });
         if (newParent) ui.collapsed = ui.collapsed.filter(c => c !== newParent);
       }
-      save(); saveUI(); closeModal(); render();
+      saveUI(); closeModal(); render();
     };
     bd.querySelector('[data-del]')?.addEventListener('click', () => {
       const n = descendants(item).length;
-      if (confirm(`Delete “${item.name}”${n ? ` and its ${n} sub-item${n > 1 ? 's' : ''}` : ''}? This cannot be undone.`)) { closeModal(); deleteItem(item.id); }
+      confirmDialog(`Delete “${item.name}”${n ? ` and its ${n} sub-item${n > 1 ? 's' : ''}` : ''}? This cannot be undone.`, 'Delete', () => deleteItem(item.id), () => itemModal({ id: item.id }));
     });
     bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => { moveItem(item.id, Number(b.dataset.move)); itemModal({ id: item.id }); });
   });
@@ -833,22 +859,26 @@ function initModal(id) {
       const name = bd.querySelector('[name=name]').value.trim();
       const description = bd.querySelector('[name=description]').value.trim();
       if (!name) { toast('Please enter a name.'); return; }
-      if (init) Object.assign(init, { name, description });
-      else { const n = { id: uid(), name, description, order: db.initiatives.length ? Math.max(...db.initiatives.map(i => i.order ?? 0)) + 1 : 0, createdAt: new Date().toISOString() }; db.initiatives.push(n); ui.view = n.id; ui.track = 'all'; }
-      save(); saveUI(); closeModal(); render();
+      if (init) { Object.assign(init, { name, description }); commit({ inits: [init] }); }
+      else { const n = { id: uid(), name, description, order: db.initiatives.length ? Math.max(...db.initiatives.map(i => i.order ?? 0)) + 1 : 0, createdAt: new Date().toISOString() }; db.initiatives.push(n); commit({ inits: [n] }); ui.view = n.id; ui.track = 'all'; }
+      saveUI(); closeModal(); render();
     };
     bd.querySelector('[data-del]')?.addEventListener('click', () => {
       const n = db.items.filter(i => i.initiativeId === init.id).length;
-      if (!confirm(`Delete initiative “${init.name}” and its ${n} item${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
-      db.initiatives = db.initiatives.filter(i => i.id !== init.id);
-      db.items = db.items.filter(i => i.initiativeId !== init.id);
-      db.items.forEach(i => { if (i.links) i.links = i.links.filter(l => l !== init.id); });
-      ui.view = 'overview'; save(); saveUI(); closeModal(); render();
+      confirmDialog(`Delete initiative “${init.name}” and its ${n} item${n === 1 ? '' : 's'}? This cannot be undone.`, 'Delete initiative', () => {
+        const delItems = db.items.filter(i => i.initiativeId === init.id).map(i => i.id);
+        db.initiatives = db.initiatives.filter(i => i.id !== init.id);
+        db.items = db.items.filter(i => i.initiativeId !== init.id);
+        const relinked = db.items.filter(i => (i.links || []).includes(init.id));
+        relinked.forEach(i => { i.links = i.links.filter(l => l !== init.id); });
+        commit({ items: relinked, delItems, delInits: [init.id] });
+        ui.view = 'overview'; saveUI(); render();
+      }, () => initModal(init.id));
     });
     bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => {
       const list = initiatives(); const i = list.indexOf(init), j = i + Number(b.dataset.move);
       if (j < 0 || j >= list.length) return;
-      [list[i], list[j]] = [list[j], list[i]]; list.forEach((x, k) => x.order = k); save(); render();
+      [list[i], list[j]] = [list[j], list[i]]; list.forEach((x, k) => x.order = k); commit({ inits: list }); render();
     });
   });
 }
@@ -895,7 +925,15 @@ function summaryRows() {
   return rows;
 }
 function stamp() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
-function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+async function download(name, blob) {
+  if (store.downloads) {
+    try { await store.downloads.save({ filename: name, data: blob }); }
+    catch (e) { if (e && e.code !== 'declined') toast('This view cannot save files. Open the tracker in a browser to download.'); }
+    return;
+  }
+  downloadLink(name, blob);
+}
+function downloadLink(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 function exportExcel() {
   index();
   const items = rowsForExport(), summary = summaryRows();
@@ -908,7 +946,8 @@ function exportExcel() {
       const rows = items.filter(r => r.Initiative === i.name);
       if (rows.length) add(rows, i.name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31), [22, 34, 8, 60, 18, 12, 14, 30, 30, 15, 22, 18, 26, 40, 20]);
     });
-    XLSX.writeFile(wb, `Project_AHA_${stamp()}.xlsx`);
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    download(`Project_AHA_${stamp()}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   } else {
     // Offline fallback: CSV opens directly in Excel.
     const cols = Object.keys(items[0] || {});
@@ -924,8 +963,13 @@ function restore(file) {
     try {
       const data = JSON.parse(r.result);
       if (!Array.isArray(data.initiatives) || !Array.isArray(data.items)) throw new Error('bad shape');
-      if (!confirm(`Replace current data with backup (${data.initiatives.length} initiatives, ${data.items.length} items)?`)) return;
-      db = data; ui.view = 'overview'; ui.track = 'all'; save(); saveUI(); render(); toast('Backup restored.');
+      confirmDialog(`Replace all current data with this backup (${data.initiatives.length} initiatives, ${data.items.length} items)?${store.mode === 'shared' ? ' This changes the tracker for everyone.' : ''}`, 'Replace data', () => {
+        const delItems = db.items.map(i => i.id).filter(id => !data.items.some(x => x.id === id));
+        const delInits = db.initiatives.map(i => i.id).filter(id => !data.initiatives.some(x => x.id === id));
+        db = { version: 1, initiatives: data.initiatives, items: data.items };
+        commit({ inits: data.initiatives, items: data.items, delItems, delInits }).then(() => toast('Backup restored.'));
+        ui.view = 'overview'; ui.track = 'all'; saveUI(); render();
+      });
     } catch { toast('That file is not a valid Project AHA backup.'); }
   };
   r.readAsText(file);
@@ -979,8 +1023,7 @@ app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]');
 document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-load();
-render();
+boot();
 </script>
 </body>
 </html>
