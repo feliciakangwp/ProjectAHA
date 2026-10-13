@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project AHA Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f1f5f9; --surface: #ffffff; --surface-2: #f8fafc; --border: #e2e8f0; --border-strong: #cbd5e1;
+    --ink: #0f172a; --ink-2: #334155; --muted: #64748b; --faint: #94a3b8;
+    --primary: #2563eb; --primary-ink: #ffffff; --primary-soft: #eff6ff;
+    --danger: #b91c1c; --danger-soft: #fef2f2; --warn: #b45309; --warn-soft: #fffbeb; --ok: #047857; --ok-soft: #ecfdf5;
+    --radius: 12px; --shadow: 0 1px 2px rgba(15,23,42,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 24px 32px 64px; }
+
+  /* Header + nav */
+  .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; }
+  .sub { color: var(--muted); margin-top: 4px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 14px; white-space: nowrap; }
+  .btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.dark { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .btn.sm { padding: 4px 10px; font-size: 13px; border-radius: 7px; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
+  .btn.danger { color: var(--danger); }
+  .tabs { display: flex; gap: 6px; margin: 20px 0 18px; flex-wrap: wrap; align-items: center; }
+  .tab { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 7px 16px; font-weight: 500; }
+  .tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tab .n { color: var(--faint); font-size: 12px; margin-left: 6px; }
+  .tab.active .n { color: #cbd5e1; }
+  .tab.add { border-style: dashed; color: var(--primary); }
+
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .kpi { padding: 18px 20px; }
+  .kpi.hero { border: 2px solid var(--primary); }
+  .kpi .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 6px; }
+  .kpi .val { font-size: 30px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.02em; }
+  .kpi .hint { font-size: 12px; color: var(--muted); }
+  .kpi .val.bad { color: var(--danger); }
+
+  .banner { margin: 16px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid #fde68a; background: var(--warn-soft); color: #92400e; font-size: 13px; }
+
+  /* Status */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  select.status { border: 1px solid transparent; border-radius: 7px; padding: 3px 6px; font-size: 12.5px; font-weight: 600; }
+  select.status:disabled { opacity: 1; cursor: not-allowed; }
+
+  /* Overview */
+  .section-title { display: flex; justify-content: space-between; align-items: baseline; margin: 28px 0 12px; }
+  .section-title h2 { margin: 0; font-size: 19px; }
+  .section-title .meta { color: var(--muted); font-size: 13px; }
+  .dist { padding: 18px 20px; }
+  .stackbar { display: flex; gap: 2px; height: 14px; margin: 10px 0 12px; }
+  .stackbar > div { height: 100%; min-width: 4px; }
+  .stackbar > div:first-child { border-radius: 4px 0 0 4px; }
+  .stackbar > div:last-child { border-radius: 0 4px 4px 0; }
+  .stackbar > div:only-child { border-radius: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend b { color: var(--ink); }
+  .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .inits { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .init { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .init-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .init-head h3 { margin: 0; font-size: 17px; }
+  .init-head .desc { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .bar { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; background: #047857; border-radius: 999px; }
+  .prog-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .prog-row b { color: var(--ink); }
+  .tracklist { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+  .trackrow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .trackrow:last-child { border-bottom: 0; }
+  .trackrow .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trackrow .c { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .code { color: var(--faint); font-variant-numeric: tabular-nums; font-weight: 600; margin-right: 6px; }
+  .init.add { align-items: center; justify-content: center; border-style: dashed; color: var(--primary); min-height: 160px; cursor: pointer; background: transparent; }
+  .dl { padding: 8px 0; }
+  .dl-item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .dl-item:last-child { border-bottom: 0; }
+  .dl-item:hover { background: var(--surface-2); }
+  .dl-item .nm { font-weight: 500; }
+  .dl-item .path { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); padding: 18px; text-align: center; font-size: 13px; }
+
+  /* Due chips */
+  .due { font-size: 12px; font-weight: 600; white-space: nowrap; padding: 2px 8px; border-radius: 6px; }
+  .due.over { color: var(--danger); background: var(--danger-soft); }
+  .due.soon { color: var(--warn); background: var(--warn-soft); }
+  .due.later { color: var(--muted); background: var(--surface-2); }
+  .due.done { color: var(--faint); }
+
+  /* Work panel */
+  .work { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
+  .work > section { min-width: 0; }
+  .side { padding: 16px; position: sticky; top: 12px; }
+  .side h4 { margin: 4px 8px 10px; font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+  .side-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; }
+  .side-item:hover { background: var(--surface-2); }
+  .side-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+  .side-item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side-item .n { color: var(--faint); font-size: 12px; }
+  .side .foot { margin-top: 16px; padding: 12px 8px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .side .foot .big { font-size: 18px; font-weight: 700; color: var(--ink); margin: 4px 0 6px; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .toolbar input[type=search] { flex: 1; min-width: 200px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 12px; }
+  .toolbar select { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 10px; }
+  .toolbar label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); }
+  .seg button { border: 0; background: transparent; padding: 8px 16px; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .work-head { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0 10px; gap: 10px; }
+  .work-head h3 { margin: 0; font-size: 18px; }
+  .work-head .meta { color: var(--muted); font-size: 13px; }
+
+  /* Checklist */
+  .group { margin-bottom: 18px; }
+  .init-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; margin: 22px 0 8px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
+  .row.track { background: var(--surface); border-left: 4px solid var(--ink); }
+  .row.done { background: var(--surface-2); }
+  .row.done .name, .row.done .code { color: var(--faint); text-decoration: line-through; }
+  .row.done .meta-line, .row.done select.status { opacity: .6; }
+  .row .main { flex: 1; min-width: 0; }
+  .row .name { font-weight: 600; }
+  .row.track .name { font-size: 15.5px; }
+  .meta-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .tag { font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: #eef2ff; color: #3730a3; font-weight: 500; }
+  .tag.link { background: #f0fdfa; color: #115e59; }
+  .tag.derived { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  .row .right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .row input[type=date] { border: 1px solid var(--border); border-radius: 7px; padding: 3px 6px; font-size: 12.5px; background: var(--surface); color: var(--ink-2); }
+  .cb { width: 20px; height: 20px; accent-color: #047857; flex: none; }
+  .toggle { width: 22px; height: 22px; border: 0; background: transparent; color: var(--muted); border-radius: 6px; flex: none; font-size: 12px; padding: 0; }
+  .toggle:hover { background: var(--surface-2); }
+  .toggle.blank { visibility: hidden; }
+
+  /* Board */
+  .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+  .col { background: #e8eef5; border-radius: 12px; padding: 10px; min-height: 240px; }
+  .col.over { outline: 2px dashed var(--primary); outline-offset: -2px; }
+  .col-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; padding: 4px 4px 10px; }
+  .col-head span { display: inline-flex; gap: 6px; align-items: center; }
+  .bcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: grab; box-shadow: var(--shadow); }
+  .bcard.dragging { opacity: .4; }
+  .bcard.done .name { color: var(--faint); text-decoration: line-through; }
+  .bcard .name { font-weight: 600; margin-bottom: 4px; }
+  .bcard .path { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .bcard .foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+  /* Modal */
+  .backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 50; overflow-y: auto; }
+  .modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 560px; box-shadow: 0 20px 50px rgba(15,23,42,.25); }
+  .modal header { padding: 18px 22px 0; display: flex; justify-content: space-between; align-items: center; }
+  .modal header h3 { margin: 0; font-size: 18px; }
+  .modal .body { padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .modal footer { padding: 14px 22px 18px; display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 5px; }
+  .field input[type=text], .field input[type=date], .field select, .field textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .field textarea { min-height: 70px; resize: vertical; }
+  .field .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .checks label { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; margin: 0; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+
+  @media (max-width: 960px) {
+    .work { grid-template-columns: 1fr; }
+    .side { position: static; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 16px 16px 48px; }
+    h1 { font-size: 24px; }
+    .row { flex-wrap: wrap; }
+    .row .right { width: 100%; justify-content: flex-start; }
+    .two { grid-template-columns: 1fr; }
+    .inits { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script>
+/* =========================================================================
+   Project AHA — Finance Transformation tracker
+   Data lives in the browser (localStorage). Use "Backup" / "Restore" to move
+   it between machines and "Export Excel" for reporting.
+   ========================================================================= */
+
+const STORAGE_KEY = 'projectAHA.db.v1';
+const UI_KEY = 'projectAHA.ui.v1';
+
+// Order matters: lowest progress first. A parent shows the lowest status of its children.
+const STATUSES = ['Thoughts', 'Pending User', 'Planning', 'Developing', 'IT Testing', 'User Testing', 'Completed', 'Void'];
+const STATUS_META = {
+  'Thoughts':     { color: '#64748b', bg: '#f1f5f9', ink: '#475569', hint: 'Idea stage' },
+  'Pending User': { color: '#d97706', bg: '#fffbeb', ink: '#b45309', hint: 'Waiting on users' },
+  'Planning':     { color: '#0891b2', bg: '#ecfeff', ink: '#0e7490', hint: 'Scoping & design' },
+  'Developing':   { color: '#ea580c', bg: '#fff7ed', ink: '#c2410c', hint: 'Build & clarify' },
+  'IT Testing':   { color: '#2563eb', bg: '#eff6ff', ink: '#1d4ed8', hint: 'Internal validation' },
+  'User Testing': { color: '#7c3aed', bg: '#f5f3ff', ink: '#6d28d9', hint: 'User validation' },
+  'Completed':    { color: '#047857', bg: '#ecfdf5', ink: '#047857', hint: 'Released' },
+  'Void':         { color: '#a8a29e', bg: '#f5f5f4', ink: '#78716c', hint: 'Dropped' },
+};
+const RANK = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
+const isClosed = s => s === 'Completed' || s === 'Void';
+
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ------------------------------------------------------------------ seed */
+function buildSeed() {
+  const now = new Date().toISOString();
+  const db = { version: 1, initiatives: [], items: [] };
+  const addInit = (name, description) => {
+    const it = { id: uid(), name, description, order: db.initiatives.length, createdAt: now };
+    db.initiatives.push(it); return it.id;
+  };
+  // Adds an item; `children` is an array of [name, status, children?] tuples.
+  const addItem = (initiativeId, parentId, name, status, children, order) => {
+    const item = { id: uid(), initiativeId, parentId, name, status: status || 'Thoughts', deadline: '', owner: '', notes: '', links: [], order, createdAt: now, updatedAt: now };
+    db.items.push(item);
+    (children || []).forEach((c, i) => addItem(initiativeId, item.id, c[0], c[1], c[2], i));
+    return item.id;
+  };
+  const addTracks = (initId, tracks) => tracks.map((t, i) => addItem(initId, null, t[0], t[1], t[2], i));
+
+  const orion = addInit('ORION', 'Budgeting, projection & utilisation platform');
+  const polaris = addInit('POLARIS', 'Debt management, fees & reconciliation');
+  const payment = addInit('Payment Transformation', 'End-to-end payment process redesign');
+
+  addTracks(orion, [
+    ['Medium Term Projection (MTP)', null, [
+      ['Recalculation of SOF', 'IT Testing'],
+      ['MTP Variance after refactoring', 'IT Testing'],
+      ['MTP Broken Linkage (Mainstreaming)', 'Developing'],
+    ]],
+    ['Annual Budget', null, [
+      ['When to port Annual Budget line over to MTP (after Fin Supported?)', 'Planning'],
+      ['Include column in Raw Report: Budgeted amount after DY Supported, before Clarification', 'Planning'],
+    ]],
+    ['Block Budget', null, [
+      ['Refactoring of Block Budget', 'Developing'],
+      ['Block Budget Raw Report', 'IT Testing'],
+      ['Block Budget Report', 'IT Testing'],
+      ['Block Budget Variance Report', 'IT Testing'],
+      ['Block Budget Projection Parameter', 'Developing'],
+    ]],
+    ['Expenditure & Utilisation', null, [
+      ['Uploading of Expenditure GL', 'User Testing'],
+      ['Calculation of Project Utilisation', 'User Testing'],
+      ['Calculation of individual line utilisation', 'Pending User'],
+      ['Provide expenditure access to specific Branch Rep (tag to BR Account)', 'Developing'],
+      ['AOR', 'User Testing'],
+    ]],
+    ['Dashboard', null, [
+      ['Outstanding To Do Items', 'IT Testing'],
+      ['Project Budget', 'IT Testing'],
+      ['Project Expenditure & Utilisation', 'IT Testing'],
+      ['Individual lines budget by Branch', 'Thoughts'],
+      ['Individual lines Expenditure & Utilisation', 'Thoughts'],
+      ['Customisation of Tables', 'Thoughts'],
+      ['ServiceNow Error Issue', 'Developing'],
+    ]],
+    ['Post Feedback Iterations', null, [
+      ['Email Notification', 'Planning'],
+      ['Force Refresh of Page', 'Developing'],
+      ['Shift view for Reviewers and Approvals', 'Planning'],
+      ['Justification of Variance Link', 'Developing'],
+    ]],
+  ]);
+
+  const [debt] = addTracks(polaris, [
+    ['Debt Management', null, [
+      ['Pulling of data on Debt Records', 'Thoughts'],
+      ['List of Debt Records', null, [
+        ['List of Debt Records', 'Completed'],
+        ['Debtor Report', 'Completed'],
+        ['Arrears Report', 'Completed'],
+        ['Written Off Report', 'Completed'],
+        ['To Be Written Off Report', 'Completed'],
+        ['Call for Return', 'Completed'],
+      ]],
+      ['Payments', 'Thoughts', [
+        ['Monthly Giro deduction', 'Thoughts'],
+      ]],
+      ['Reconciliation', 'Thoughts'],
+      ['Debt Management Dashboard', 'Thoughts'],
+    ]],
+    ['Fees & Maintenance', 'Thoughts'],
+    ['Reconciliation', 'Thoughts'],
+  ]);
+  // POLARIS 1c Payments is also relevant to Payment Transformation.
+  const payments = db.items.find(i => i.parentId === debt && i.name === 'Payments');
+  if (payments) payments.links = [payment];
+
+  addTracks(payment, [
+    ['Payment before Permit Approval', 'Pending User'],
+  ]);
+  return db;
+}
+
+/* ------------------------------------------------------------- storage */
+let db, ui;
+function load() {
+  try { db = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { db = null; }
+  if (!db || !Array.isArray(db.initiatives) || !Array.isArray(db.items)) { db = buildSeed(); save(); }
+  try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
+  ui = Object.assign({ view: 'overview', track: 'all', mode: 'checklist', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [] }, ui);
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+  catch (e) { toast('Could not save — browser storage is full or blocked. Download a backup.'); }
+}
+function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
+
+/* --------------------------------------------------------- derivations */
+// Rebuilt on every render so that parents always reflect their children.
+let IDX;
+function index() {
+  const byId = new Map(db.items.map(i => [i.id, i]));
+  const kids = new Map();
+  for (const i of db.items) {
+    const key = i.parentId && byId.has(i.parentId) ? i.parentId : 'root:' + i.initiativeId;
+    if (!kids.has(key)) kids.set(key, []);
+    kids.get(key).push(i);
+  }
+  for (const list of kids.values()) list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  IDX = { byId, kids, status: new Map(), code: new Map(), deadline: new Map(), initById: new Map(db.initiatives.map(x => [x.id, x])) };
+}
+const childrenOf = id => IDX.kids.get(id) || [];
+const tracksOf = initId => IDX.kids.get('root:' + initId) || [];
+const hasKids = item => childrenOf(item.id).length > 0;
+const initiatives = () => [...db.initiatives].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+// Effective status: a leaf uses its own status; a parent takes the lowest
+// status among its non-Void children. If every child is Void, it is Void.
+function effStatus(item) {
+  if (IDX.status.has(item.id)) return IDX.status.get(item.id);
+  const kids = childrenOf(item.id);
+  let s = item.status;
+  if (kids.length) {
+    const live = kids.map(effStatus).filter(x => x !== 'Void');
+    s = live.length ? live.reduce((a, b) => (RANK[a] <= RANK[b] ? a : b)) : 'Void';
+  }
+  IDX.status.set(item.id, s);
+  return s;
+}
+
+const letters = n => { let s = ''; n += 1; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(97 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+// Numbering follows position: 1, 1a, 1a.1, 1a.1.1 ...
+function codeOf(item) {
+  if (IDX.code.has(item.id)) return IDX.code.get(item.id);
+  const parent = item.parentId && IDX.byId.get(item.parentId);
+  const siblings = parent ? childrenOf(parent.id) : tracksOf(item.initiativeId);
+  const pos = siblings.indexOf(item);
+  let c;
+  if (!parent) c = String(pos + 1);
+  else if (!parent.parentId) c = codeOf(parent) + letters(pos);
+  else c = codeOf(parent) + '.' + (pos + 1);
+  IDX.code.set(item.id, c);
+  return c;
+}
+const depthOf = item => { let d = 0, p = item; while (p.parentId && IDX.byId.get(p.parentId)) { d++; p = IDX.byId.get(p.parentId); } return d; };
+const trackOf = item => { let p = item; while (p.parentId && IDX.byId.get(p.parentId)) p = IDX.byId.get(p.parentId); return p; };
+const ancestors = item => { const out = []; let p = item; while (p.parentId && IDX.byId.get(p.parentId)) { p = IDX.byId.get(p.parentId); out.unshift(p); } return out; };
+function descendants(item) { const out = []; const walk = i => childrenOf(i.id).forEach(c => { out.push(c); walk(c); }); walk(item); return out; }
+function leavesUnder(item) { return hasKids(item) ? descendants(item).filter(d => !hasKids(d)) : [item]; }
+const leavesOfInit = initId => tracksOf(initId).flatMap(leavesUnder);
+const allLeaves = () => initiatives().flatMap(i => leavesOfInit(i.id));
+
+// Parents without their own deadline inherit the earliest open deadline below them.
+function effDeadline(item) {
+  if (IDX.deadline.has(item.id)) return IDX.deadline.get(item.id);
+  let d = { date: item.deadline || '', inherited: false };
+  if (!d.date && hasKids(item)) {
+    const ds = descendants(item).filter(x => x.deadline && !isClosed(effStatus(x))).map(x => x.deadline).sort();
+    if (ds.length) d = { date: ds[0], inherited: true };
+  }
+  IDX.deadline.set(item.id, d);
+  return d;
+}
+
+function todayISO() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function daysUntil(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  return Math.round((new Date(y, m - 1, d) - todayISO()) / 86400000);
+}
+function dueInfo(item) {
+  const s = effStatus(item); const { date, inherited } = effDeadline(item);
+  if (!date) return null;
+  const n = daysUntil(date);
+  const pre = inherited ? 'Next: ' : '';
+  if (isClosed(s)) return { cls: 'done', text: s === 'Void' ? 'Void' : 'Done', n };
+  if (n < 0) return { cls: 'over', text: `${pre}Overdue by ${-n} day${n === -1 ? '' : 's'}`, n };
+  if (n === 0) return { cls: 'soon', text: `${pre}Due today`, n };
+  return { cls: n <= 7 ? 'soon' : 'later', text: `${pre}${n} day${n === 1 ? '' : 's'} left`, n };
+}
+const fmtDate = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+function stats(leaves) {
+  const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
+  leaves.forEach(l => counts[effStatus(l)]++);
+  const live = leaves.length - counts['Void'];
+  const done = counts['Completed'];
+  return { counts, total: leaves.length, live, done, pct: live ? Math.round(done / live * 100) : 0 };
+}
+function lowestStatus(items) {
+  const live = items.map(effStatus).filter(s => s !== 'Void');
+  return live.length ? live.reduce((a, b) => (RANK[a] <= RANK[b] ? a : b)) : (items.length ? 'Void' : null);
+}
+const pathText = item => { const init = IDX.initById.get(item.initiativeId); return [init ? init.name : '', ...ancestors(item).map(a => `${codeOf(a)} ${a.name}`)].filter(Boolean).join(' › '); };
+
+/* ------------------------------------------------------------ mutations */
+function touch(item) { item.updatedAt = new Date().toISOString(); }
+function setStatus(id, status) {
+  const item = IDX.byId.get(id); if (!item) return;
+  if (status === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status;
+  item.status = status; touch(item); save(); render();
+}
+function setDeadline(id, date) { const item = IDX.byId.get(id); if (!item) return; item.deadline = date; touch(item); save(); render(); }
+function toggleDone(id, checked) {
+  const item = IDX.byId.get(id); if (!item) return;
+  if (checked) setStatus(id, 'Completed');
+  else setStatus(id, item.prevStatus && item.prevStatus !== 'Completed' ? item.prevStatus : 'User Testing');
+}
+function deleteItem(id) {
+  const item = IDX.byId.get(id); if (!item) return;
+  const gone = new Set([id, ...descendants(item).map(d => d.id)]);
+  db.items = db.items.filter(i => !gone.has(i.id));
+  if (ui.track && gone.has(ui.track)) ui.track = 'all';
+  save(); render();
+}
+function moveItem(id, dir) {
+  const item = IDX.byId.get(id); if (!item) return;
+  const sibs = item.parentId ? childrenOf(item.parentId) : tracksOf(item.initiativeId);
+  const i = sibs.indexOf(item), j = i + dir;
+  if (j < 0 || j >= sibs.length) return;
+  [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
+  sibs.forEach((s, k) => s.order = k);
+  save(); render();
+}
+function nextOrder(initId, parentId) { const sibs = parentId ? childrenOf(parentId) : tracksOf(initId); return sibs.length ? Math.max(...sibs.map(s => s.order ?? 0)) + 1 : 0; }
+
+/* -------------------------------------------------------------- render */
+const statusPill = s => { const m = STATUS_META[s] || STATUS_META.Thoughts; return `<span class="pill" style="background:${m.bg};color:${m.ink}"><span class="dot" style="background:${m.color}"></span>${esc(s)}</span>`; };
+function statusSelect(item) {
+  const s = effStatus(item), m = STATUS_META[s];
+  const derived = hasKids(item);
+  return `<select class="status" data-act="status" data-id="${item.id}" style="background:${m.bg};color:${m.ink}" ${derived ? 'disabled title="Rolled up from sub-items — change a sub-item to update"' : ''}>
+    ${STATUSES.map(x => `<option ${x === s ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
+}
+const dueChip = item => { const d = dueInfo(item); return d ? `<span class="due ${d.cls}" title="Deadline ${esc(fmtDate(effDeadline(item).date))}">${esc(d.text)}</span>` : ''; };
+
+function render() {
+  index();
+  if (ui.view !== 'overview' && !IDX.initById.has(ui.view)) { ui.view = 'overview'; ui.track = 'all'; }
+  const app = document.getElementById('app');
+  const inits = initiatives();
+  const cur = ui.view === 'overview' ? null : IDX.initById.get(ui.view);
+  const title = cur ? `What’s next for ${esc(cur.name)}?` : 'Project AHA — Finance Transformation';
+  const subtitle = cur ? (esc(cur.description) || 'Track the work. Clear testing. Move confidently to release.') : 'Overall progress across all initiatives. Select an initiative to drill into its tracks.';
+
+  app.innerHTML = `
+    <div class="top">
+      <div><h1>${title}</h1><div class="sub">${subtitle}</div></div>
+      <div class="actions">
+        <button class="btn" data-act="export-xlsx">Export Excel</button>
+        <button class="btn" data-act="backup">Backup</button>
+        <button class="btn" data-act="restore">Restore</button>
+        ${cur ? `<button class="btn" data-act="edit-init" data-id="${cur.id}">Edit initiative</button>
+                 <button class="btn primary" data-act="add-item" data-init="${cur.id}">+ Add track</button>`
+              : `<button class="btn primary" data-act="add-init">+ Add initiative</button>`}
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab ${!cur ? 'active' : ''}" data-act="view" data-view="overview">Project AHA overview</button>
+      ${inits.map(i => `<button class="tab ${cur && cur.id === i.id ? 'active' : ''}" data-act="view" data-view="${i.id}">${esc(i.name)}<span class="n">${leavesOfInit(i.id).length}</span></button>`).join('')}
+      <button class="tab add" data-act="add-init">+ New initiative</button>
+    </nav>
+    ${cur ? renderInitiativeHeader(cur) : renderOverview(inits)}
+    ${renderWork(cur)}
+  `;
+}
+
+function kpiCards(leaves, heroLabel) {
+  const st = stats(leaves);
+  const open = leaves.filter(l => !isClosed(effStatus(l)));
+  const overdue = open.filter(l => { const n = daysUntil(l.deadline); return n !== null && n < 0; }).length;
+  const soon = open.filter(l => { const n = daysUntil(l.deadline); return n !== null && n >= 0 && n <= 7; }).length;
+  const groups = [
+    ['Early stage', ['Thoughts', 'Pending User', 'Planning'], 'Thoughts · Pending user · Planning', '#64748b'],
+    ['Developing', ['Developing'], 'Build & clarify', STATUS_META.Developing.color],
+    ['Testing', ['IT Testing', 'User Testing'], `IT ${st.counts['IT Testing']} · User ${st.counts['User Testing']}`, STATUS_META['IT Testing'].color],
+    ['Completed', ['Completed'], st.counts.Void ? `${st.counts.Void} void (excluded)` : 'Released', STATUS_META.Completed.color],
+  ];
+  return `<div class="kpis">
+    <div class="card kpi hero"><div class="lbl">${esc(heroLabel)}</div><div class="val">${st.pct}%</div><div class="hint">${st.done} of ${st.live} work items completed</div></div>
+    ${groups.map(([lbl, ss, hint, color]) => `<div class="card kpi"><div class="lbl"><span class="dot" style="background:${color}"></span>${lbl}</div><div class="val">${ss.reduce((a, s) => a + st.counts[s], 0)}</div><div class="hint">${hint}</div></div>`).join('')}
+    <div class="card kpi"><div class="lbl">Deadlines</div><div class="val ${overdue ? 'bad' : ''}">${overdue}</div><div class="hint">overdue · ${soon} due within 7 days</div></div>
+  </div>`;
+}
+
+function distribution(leaves) {
+  const st = stats(leaves);
+  const segs = STATUSES.filter(s => st.counts[s]);
+  return `<div class="card dist">
+    <div class="prog-row"><span>Status of all ${st.total} work items</span></div>
+    <div class="stackbar" role="img" aria-label="Status distribution">
+      ${segs.map(s => `<div style="flex:${st.counts[s]};background:${STATUS_META[s].color}" title="${s}: ${st.counts[s]} (${Math.round(st.counts[s] / st.total * 100)}%)"></div>`).join('')}
+    </div>
+    <div class="legend">${STATUSES.map(s => `<span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s} <b>${st.counts[s]}</b></span>`).join('')}</div>
+  </div>`;
+}
+
+function renderOverview(inits) {
+  const leaves = allLeaves();
+  const open = leaves.filter(l => !isClosed(effStatus(l)) && l.deadline);
+  const upcoming = open.map(l => ({ l, n: daysUntil(l.deadline) })).filter(x => x.n <= 14).sort((a, b) => a.n - b.n).slice(0, 12);
+  return `
+    ${kpiCards(leaves, 'Project AHA progress')}
+    <div class="section-title"><h2>Initiatives</h2><span class="meta">${inits.length} initiative${inits.length === 1 ? '' : 's'} · status shown is the lowest across each track</span></div>
+    <div class="inits">
+      ${inits.map(i => {
+        const tr = tracksOf(i.id); const st = stats(leavesOfInit(i.id)); const low = lowestStatus(tr);
+        return `<div class="card init">
+          <div class="init-head">
+            <div><h3>${esc(i.name)}</h3><div class="desc">${esc(i.description || '')}</div></div>
+            ${low ? statusPill(low) : ''}
+          </div>
+          <div><div class="prog-row"><span>${st.done} of ${st.live} completed</span><b>${st.pct}%</b></div><div class="bar"><div style="width:${st.pct}%"></div></div></div>
+          <div class="tracklist">
+            ${tr.map(t => { const ls = stats(leavesUnder(t)); return `<div class="trackrow"><span class="t"><span class="code">${codeOf(t)}</span>${esc(t.name)}</span><span class="c">${ls.done}/${ls.live}</span>${statusPill(effStatus(t))}</div>`; }).join('') || '<div class="empty">No tracks yet</div>'}
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn sm ghost" data-act="edit-init" data-id="${i.id}">Rename</button>
+            <button class="btn sm" data-act="view" data-view="${i.id}">Open ${esc(i.name)} →</button>
+          </div>
+        </div>`;
+      }).join('')}
+      <button class="card init add" data-act="add-init">+ Add new initiative</button>
+    </div>
+    <div class="section-title"><h2>Status mix & deadlines</h2><span class="meta">Today: ${fmtDate(stamp())}</span></div>
+    <div class="grid-2">
+      ${distribution(leaves)}
+      <div class="card dl">
+        <div style="padding:6px 18px 8px;font-weight:600">Overdue & due in next 14 days</div>
+        ${upcoming.length ? upcoming.map(({ l }) => `<div class="dl-item" data-act="edit-item" data-id="${l.id}"><div><div class="nm">${esc(l.name)}</div><div class="path">${esc(pathText(l))}</div></div>${dueChip(l)}</div>`).join('')
+          : '<div class="empty">No open items due in the next 14 days. Set deadlines from the checklist or the Edit dialog.</div>'}
+      </div>
+    </div>
+    <div class="section-title"><h2>All work</h2><span class="meta">Every initiative in one list</span></div>`;
+}
+
+function renderInitiativeHeader(init) {
+  const linked = db.items.filter(i => (i.links || []).includes(init.id) && i.initiativeId !== init.id);
+  return `${kpiCards(leavesOfInit(init.id), init.name + ' progress')}
+    ${linked.length ? `<div class="banner" style="border-color:#99f6e4;background:#f0fdfa;color:#115e59">${linked.length} item${linked.length > 1 ? 's' : ''} from other initiatives ${linked.length > 1 ? 'are' : 'is'} linked here (shown at the bottom of the checklist; not counted in this initiative’s progress).</div>` : ''}
+    <div style="height:20px"></div>`;
+}
+
+/* Work panel: sidebar + checklist/board, scoped to one initiative or all. */
+function renderWork(cur) {
+  const sideEntries = cur
+    ? tracksOf(cur.id).map(t => ({ id: t.id, label: `${codeOf(t)}. ${t.name}`, count: leavesUnder(t).length, status: effStatus(t) }))
+    : initiatives().map(i => ({ id: i.id, label: i.name, count: leavesOfInit(i.id).length, status: lowestStatus(tracksOf(i.id)) }));
+  if (ui.track !== 'all' && !sideEntries.some(e => e.id === ui.track)) ui.track = 'all';
+  const scopeLeaves = cur ? leavesOfInit(cur.id) : allLeaves();
+  const st = stats(scopeLeaves);
+  const sel = sideEntries.find(e => e.id === ui.track);
+
+  return `<div class="work">
+    <aside class="card side">
+      <h4>${cur ? 'TRACKS' : 'INITIATIVES'}</h4>
+      <button class="side-item ${ui.track === 'all' ? 'active' : ''}" data-act="track" data-id="all"><span class="lbl">All ${cur ? 'tracks' : 'initiatives'}</span><span class="n">${scopeLeaves.length}</span></button>
+      ${sideEntries.map(e => `<button class="side-item ${ui.track === e.id ? 'active' : ''}" data-act="track" data-id="${e.id}" title="${esc(e.label)} — ${esc(e.status || '')}">
+        <span class="dot" style="background:${e.status ? STATUS_META[e.status].color : '#cbd5e1'}"></span><span class="lbl">${esc(e.label)}</span><span class="n">${e.count}</span></button>`).join('')}
+      ${cur ? `<button class="side-item" style="color:var(--primary)" data-act="add-item" data-init="${cur.id}">+ Add track</button>` : ''}
+      <div class="foot">
+        <div style="font-weight:700;letter-spacing:.1em;font-size:11px">COMPLETION</div>
+        <div class="big">${st.pct}%</div>
+        <div class="bar"><div style="width:${st.pct}%"></div></div>
+        <p style="margin:10px 0 0">A track or parent item shows the <b>lowest</b> status of its sub-items. Void items are excluded. Ticking a box marks the item Completed.</p>
+      </div>
+    </aside>
+    <section>
+      <div class="toolbar">
+        <input type="search" placeholder="Search items, notes or owners…" value="${esc(ui.search)}" data-act="search">
+        <select data-act="filter-status"><option value="all">All statuses</option>${STATUSES.map(s => `<option ${ui.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        <label class="chk"><input type="checkbox" data-act="hide-done" ${ui.hideDone ? 'checked' : ''}> Hide completed / void</label>
+        <label class="chk"><input type="checkbox" data-act="overdue-only" ${ui.overdueOnly ? 'checked' : ''}> Overdue only</label>
+        <div class="seg"><button class="${ui.mode === 'checklist' ? 'on' : ''}" data-act="mode" data-mode="checklist">Checklist</button><button class="${ui.mode === 'board' ? 'on' : ''}" data-act="mode" data-mode="board">Board</button></div>
+      </div>
+      <div class="work-head"><h3>${sel ? esc(sel.label) : (cur ? 'All tracks' : 'All initiatives')}</h3><span class="meta" id="countMeta"></span></div>
+      ${ui.mode === 'board' ? renderBoard(cur) : renderChecklist(cur)}
+    </section>
+  </div>`;
+}
+
+function matches(item) {
+  const s = effStatus(item);
+  if (ui.status !== 'all' && s !== ui.status) return false;
+  if (ui.hideDone && isClosed(s)) return false;
+  if (ui.overdueOnly) { const d = dueInfo(item); if (!d || d.cls !== 'over') return false; }
+  if (ui.search) {
+    const q = ui.search.toLowerCase();
+    const hay = [item.name, item.notes, item.owner, codeOf(item), ...ancestors(item).map(a => a.name)].join(' ').toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+// A node shows if it matches or any descendant matches.
+function visible(item, memo) {
+  if (memo.has(item.id)) return memo.get(item.id);
+  const v = matches(item) || childrenOf(item.id).some(c => visible(c, memo));
+  memo.set(item.id, v); return v;
+}
+const filtersActive = () => ui.search || ui.status !== 'all' || ui.hideDone || ui.overdueOnly;
+
+function rootsInScope(cur) {
+  if (cur) return tracksOf(cur.id).filter(t => ui.track === 'all' || t.id === ui.track);
+  return initiatives().filter(i => ui.track === 'all' || i.id === ui.track).flatMap(i => tracksOf(i.id));
+}
+
+function rowHTML(item, depth, opts = {}) {
+  const s = effStatus(item), closed = isClosed(s), kids = hasKids(item);
+  const collapsed = ui.collapsed.includes(item.id);
+  const leafCount = kids ? leavesUnder(item) : null;
+  const ls = kids ? stats(leafCount) : null;
+  const linkTags = (item.links || []).map(l => IDX.initById.get(l)).filter(Boolean).filter(l => l.id !== item.initiativeId)
+    .map(l => `<span class="tag link" title="Linked initiative">↔ ${esc(l.name)}</span>`).join('');
+  const fromTag = opts.linkedFrom ? `<span class="tag">From ${esc(opts.linkedFrom)}</span>` : '';
+  return `<div class="row ${depth === 0 ? 'track' : ''} ${closed ? 'done' : ''}" style="margin-left:${depth * 28}px">
+    <button class="toggle ${kids ? '' : 'blank'}" data-act="collapse" data-id="${item.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▶' : '▼'}</button>
+    <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : ''}>
+    <div class="main">
+      <div class="name"><span class="code">${opts.linkedFrom ? '' : (depth === 0 ? 'Track ' : '')}${codeOf(item)}</span>${esc(item.name)}</div>
+      <div class="meta-line">
+        ${opts.path ? `<span>${esc(opts.path)}</span>` : ''}
+        ${fromTag}
+        ${kids ? `<span class="tag derived" title="Status rolled up from sub-items">${ls.done}/${ls.live} sub-items done · rolled up</span>` : ''}
+        ${item.owner ? `<span>👤 ${esc(item.owner)}</span>` : ''}
+        ${linkTags}
+        ${item.notes ? `<span title="${esc(item.notes)}">📝 ${esc(item.notes.length > 60 ? item.notes.slice(0, 60) + '…' : item.notes)}</span>` : ''}
+      </div>
+    </div>
+    <div class="right">
+      ${dueChip(item)}
+      <input type="date" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline">
+      ${statusSelect(item)}
+      <button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
+      <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button>
+    </div>
+  </div>`;
+}
+
+function renderChecklist(cur) {
+  const memo = new Map();
+  let shown = 0;
+  const walk = (item, depth) => {
+    if (!visible(item, memo)) return '';
+    shown++;
+    let html = rowHTML(item, depth);
+    if (!ui.collapsed.includes(item.id) || filtersActive()) html += childrenOf(item.id).map(c => walk(c, depth + 1)).join('');
+    return html;
+  };
+  let html = '';
+  if (cur) {
+    html = rootsInScope(cur).map(t => `<div class="group">${walk(t, 0)}</div>`).join('');
+    if (ui.track === 'all') {
+      const linked = db.items.filter(i => (i.links || []).includes(cur.id) && i.initiativeId !== cur.id && visible(i, memo));
+      if (linked.length) html += `<div class="init-label">Linked from other initiatives</div>` + linked.map(l => { shown++; return rowHTML(l, 0, { linkedFrom: IDX.initById.get(l.initiativeId)?.name || 'another initiative', path: pathText(l) }); }).join('');
+    }
+  } else {
+    html = initiatives().filter(i => ui.track === 'all' || i.id === ui.track).map(i => {
+      const body = tracksOf(i.id).map(t => walk(t, 0)).join('');
+      return body ? `<div class="init-label">${esc(i.name)}</div>${body}` : '';
+    }).join('');
+  }
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${shown} row${shown === 1 ? '' : 's'}`; });
+  return html || `<div class="card empty">${filtersActive() ? 'No items match the filters.' : 'No tracks yet. Use “+ Add track” to create one.'}</div>`;
+}
+
+function renderBoard(cur) {
+  // Board cards are the lowest-level work items; parents are rolled up and shown in the checklist.
+  let leaves = rootsInScope(cur).flatMap(leavesUnder);
+  if (cur && ui.track === 'all') {
+    const linked = db.items.filter(i => (i.links || []).includes(cur.id) && i.initiativeId !== cur.id).flatMap(leavesUnder);
+    leaves = [...leaves, ...linked.filter(l => !leaves.includes(l))];
+  }
+  leaves = leaves.filter(matches);
+  const cols = STATUSES.filter(s => !(ui.hideDone && isClosed(s)) && (ui.status === 'all' || ui.status === s));
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${leaves.length} work item${leaves.length === 1 ? '' : 's'} · drag cards to change status`; });
+  return `<div class="board">${cols.map(s => {
+    const items = leaves.filter(l => effStatus(l) === s);
+    return `<div class="col" data-drop="${s}">
+      <div class="col-head"><span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s}</span><span style="color:var(--muted)">${items.length}</span></div>
+      ${items.map(l => `<div class="bcard ${isClosed(s) ? 'done' : ''}" draggable="true" data-drag="${l.id}">
+        <div style="display:flex;gap:8px;justify-content:space-between;align-items:flex-start">
+          <div class="name"><span class="code">${codeOf(l)}</span>${esc(l.name)}</div>
+          <input type="checkbox" class="cb" data-act="done" data-id="${l.id}" ${s === 'Completed' ? 'checked' : ''}>
+        </div>
+        <div class="path">${esc(pathText(l))}${l.initiativeId !== cur?.id && cur ? ' <span class="tag">linked</span>' : ''}${(l.links || []).filter(x => x !== l.initiativeId).map(x => IDX.initById.get(x)).filter(Boolean).map(x => ` <span class="tag link">↔ ${esc(x.name)}</span>`).join('')}</div>
+        <div class="foot">${statusSelect(l)}${dueChip(l)}<button class="btn sm" data-act="edit-item" data-id="${l.id}">Edit</button></div>
+      </div>`).join('')}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* --------------------------------------------------------------- modals */
+function openModal(html, onMount) {
+  closeModal();
+  const bd = document.createElement('div');
+  bd.className = 'backdrop'; bd.id = 'modal';
+  bd.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  bd.addEventListener('mousedown', e => { if (e.target === bd) closeModal(); });
+  document.body.appendChild(bd);
+  onMount && onMount(bd);
+  const f = bd.querySelector('input[type=text]'); f && f.focus();
+}
+function closeModal() { document.getElementById('modal')?.remove(); }
+
+function itemModal({ id, initiativeId, parentId }) {
+  const item = id ? IDX.byId.get(id) : null;
+  const initId = item ? item.initiativeId : initiativeId;
+  const init = IDX.initById.get(initId);
+  const pId = item ? item.parentId : (parentId || null);
+  const kids = item && hasKids(item);
+  const banned = new Set(item ? [item.id, ...descendants(item).map(d => d.id)] : []);
+  const parentOptions = [];
+  const walk = (list, depth) => list.forEach(i => { if (!banned.has(i.id)) { parentOptions.push(`<option value="${i.id}" ${i.id === pId ? 'selected' : ''}>${'  '.repeat(depth)}${esc(codeOf(i))} ${esc(i.name)}</option>`); walk(childrenOf(i.id), depth + 1); } });
+  walk(tracksOf(initId), 0);
+  const parent = pId && IDX.byId.get(pId);
+  const heading = item ? `Edit ${depthOf(item) === 0 ? 'track' : 'item'} ${codeOf(item)}` : (parent ? `Add sub-item under ${codeOf(parent)}` : `Add track to ${esc(init?.name || '')}`);
+  const status = item ? item.status : (parent ? 'Thoughts' : 'Thoughts');
+  const others = initiatives().filter(i => i.id !== initId);
+
+  openModal(`
+    <header><h3>${heading}</h3><button class="btn ghost sm" data-close>✕</button></header>
+    <div class="body">
+      <div class="field"><label>Name</label><input type="text" name="name" value="${esc(item?.name || '')}" placeholder="${parent ? 'e.g. Debtor Report' : 'e.g. Debt Management'}"></div>
+      <div class="field"><label>Parent</label>
+        <select name="parentId"><option value="">— Top-level track in ${esc(init?.name || '')} —</option>${parentOptions.join('')}</select>
+        <div class="help">Nest as deep as you need (Track 1 → 1a → 1a.1 → 1a.1.1 …). Numbering updates automatically.</div>
+      </div>
+      <div class="two">
+        <div class="field"><label>Status</label>
+          <select name="status" ${kids ? 'disabled' : ''}>${STATUSES.map(s => `<option ${s === (kids ? effStatus(item) : status) ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          ${kids ? `<div class="help">Rolled up from sub-items (lowest status). Change a sub-item to update it.</div>` : ''}
+        </div>
+        <div class="field"><label>Deadline</label><input type="date" name="deadline" value="${esc(item?.deadline || '')}"><div class="help" data-due></div></div>
+      </div>
+      <div class="field"><label>Owner</label><input type="text" name="owner" value="${esc(item?.owner || '')}" placeholder="Optional"></div>
+      <div class="field"><label>Notes</label><textarea name="notes" placeholder="Optional">${esc(item?.notes || '')}</textarea></div>
+      ${others.length ? `<div class="field"><label>Also linked to initiative</label><div class="checks">${others.map(o => `<label><input type="checkbox" name="links" value="${o.id}" ${(item?.links || []).includes(o.id) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('')}</div>
+        <div class="help">Linked items also appear in that initiative’s checklist and board.</div></div>` : ''}
+    </div>
+    <footer>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${item ? `<button class="btn sm danger" data-del>Delete</button><button class="btn sm" data-move="-1" title="Move up">↑</button><button class="btn sm" data-move="1" title="Move down">↓</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>${item ? 'Save' : 'Add'}</button></div>
+    </footer>`, bd => {
+    const q = n => bd.querySelector(`[name="${n}"]`);
+    const showDue = () => {
+      const v = q('deadline').value, el = bd.querySelector('[data-due]');
+      if (!v) { el.textContent = ''; return; }
+      const n = daysUntil(v);
+      el.textContent = n < 0 ? `Overdue by ${-n} day${n === -1 ? '' : 's'}` : n === 0 ? 'Due today' : `${n} day${n === 1 ? '' : 's'} from today`;
+      el.style.color = n < 0 ? 'var(--danger)' : n <= 7 ? 'var(--warn)' : '';
+    };
+    q('deadline').addEventListener('input', showDue); showDue();
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+    bd.querySelector('[data-save]').onclick = () => {
+      const name = q('name').value.trim();
+      if (!name) { q('name').focus(); toast('Please enter a name.'); return; }
+      const links = [...bd.querySelectorAll('[name=links]:checked')].map(x => x.value);
+      const newParent = q('parentId').value || null;
+      if (item) {
+        if (item.parentId !== newParent) { item.parentId = newParent; item.order = nextOrder(initId, newParent); }
+        Object.assign(item, { name, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links });
+        if (!kids) { const ns = q('status').value; if (ns === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status; item.status = ns; }
+        touch(item);
+      } else {
+        const now = new Date().toISOString();
+        db.items.push({ id: uid(), initiativeId: initId, parentId: newParent, name, status: q('status').value, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links, order: nextOrder(initId, newParent), createdAt: now, updatedAt: now });
+        if (newParent) ui.collapsed = ui.collapsed.filter(c => c !== newParent);
+      }
+      save(); saveUI(); closeModal(); render();
+    };
+    bd.querySelector('[data-del]')?.addEventListener('click', () => {
+      const n = descendants(item).length;
+      if (confirm(`Delete “${item.name}”${n ? ` and its ${n} sub-item${n > 1 ? 's' : ''}` : ''}? This cannot be undone.`)) { closeModal(); deleteItem(item.id); }
+    });
+    bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => { moveItem(item.id, Number(b.dataset.move)); itemModal({ id: item.id }); });
+  });
+}
+
+function initModal(id) {
+  const init = id ? IDX.initById.get(id) : null;
+  openModal(`
+    <header><h3>${init ? 'Edit initiative' : 'New initiative'}</h3><button class="btn ghost sm" data-close>✕</button></header>
+    <div class="body">
+      <div class="field"><label>Name</label><input type="text" name="name" value="${esc(init?.name || '')}" placeholder="e.g. POLARIS"></div>
+      <div class="field"><label>Description</label><input type="text" name="description" value="${esc(init?.description || '')}" placeholder="Optional one-liner"></div>
+    </div>
+    <footer>
+      <div style="display:flex;gap:6px">${init ? `<button class="btn sm danger" data-del>Delete initiative</button><button class="btn sm" data-move="-1" title="Move left">←</button><button class="btn sm" data-move="1" title="Move right">→</button>` : ''}</div>
+      <div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>${init ? 'Save' : 'Create'}</button></div>
+    </footer>`, bd => {
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+    bd.querySelector('[data-save]').onclick = () => {
+      const name = bd.querySelector('[name=name]').value.trim();
+      const description = bd.querySelector('[name=description]').value.trim();
+      if (!name) { toast('Please enter a name.'); return; }
+      if (init) Object.assign(init, { name, description });
+      else { const n = { id: uid(), name, description, order: db.initiatives.length ? Math.max(...db.initiatives.map(i => i.order ?? 0)) + 1 : 0, createdAt: new Date().toISOString() }; db.initiatives.push(n); ui.view = n.id; ui.track = 'all'; }
+      save(); saveUI(); closeModal(); render();
+    };
+    bd.querySelector('[data-del]')?.addEventListener('click', () => {
+      const n = db.items.filter(i => i.initiativeId === init.id).length;
+      if (!confirm(`Delete initiative “${init.name}” and its ${n} item${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
+      db.initiatives = db.initiatives.filter(i => i.id !== init.id);
+      db.items = db.items.filter(i => i.initiativeId !== init.id);
+      db.items.forEach(i => { if (i.links) i.links = i.links.filter(l => l !== init.id); });
+      ui.view = 'overview'; save(); saveUI(); closeModal(); render();
+    });
+    bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => {
+      const list = initiatives(); const i = list.indexOf(init), j = i + Number(b.dataset.move);
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]]; list.forEach((x, k) => x.order = k); save(); render();
+    });
+  });
+}
+
+/* --------------------------------------------------------------- export */
+function rowsForExport() {
+  const rows = [];
+  const walk = (item, depth) => {
+    const d = dueInfo(item), dl = effDeadline(item), init = IDX.initById.get(item.initiativeId), track = trackOf(item);
+    rows.push({
+      'Initiative': init?.name || '',
+      'Track': `${codeOf(track)}. ${track.name}`,
+      'Code': codeOf(item),
+      'Item': '    '.repeat(depth) + item.name,
+      'Level': depth === 0 ? 'Track' : `Sub-item (level ${depth})`,
+      'Has sub-items': hasKids(item) ? 'Yes' : 'No',
+      'Status': effStatus(item),
+      'Status source': hasKids(item) ? 'Rolled up (lowest of sub-items)' : 'Set directly',
+      'Deadline': dl.date ? fmtDate(dl.date) + (dl.inherited ? ' (earliest sub-item)' : '') : '',
+      'Days to deadline': d && !isClosed(effStatus(item)) ? d.n : '',
+      'Deadline status': d ? d.text : '',
+      'Owner': item.owner || '',
+      'Linked initiatives': (item.links || []).map(l => IDX.initById.get(l)?.name).filter(Boolean).join(', '),
+      'Notes': item.notes || '',
+      'Last updated': item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '',
+    });
+    childrenOf(item.id).forEach(c => walk(c, depth + 1));
+  };
+  initiatives().forEach(i => tracksOf(i.id).forEach(t => walk(t, 0)));
+  return rows;
+}
+function summaryRows() {
+  const rows = [];
+  const all = stats(allLeaves());
+  rows.push({ 'Initiative': 'PROJECT AHA (all)', 'Track': '', 'Status (lowest)': lowestStatus(initiatives().flatMap(i => tracksOf(i.id))) || '', 'Work items': all.total, 'Completed': all.done, 'Void': all.counts.Void, 'Progress %': all.pct, ...Object.fromEntries(STATUSES.map(s => [s, all.counts[s]])) });
+  initiatives().forEach(i => {
+    const st = stats(leavesOfInit(i.id));
+    rows.push({ 'Initiative': i.name, 'Track': '(all tracks)', 'Status (lowest)': lowestStatus(tracksOf(i.id)) || '', 'Work items': st.total, 'Completed': st.done, 'Void': st.counts.Void, 'Progress %': st.pct, ...Object.fromEntries(STATUSES.map(s => [s, st.counts[s]])) });
+    tracksOf(i.id).forEach(t => {
+      const ts = stats(leavesUnder(t));
+      rows.push({ 'Initiative': i.name, 'Track': `${codeOf(t)}. ${t.name}`, 'Status (lowest)': effStatus(t), 'Work items': ts.total, 'Completed': ts.done, 'Void': ts.counts.Void, 'Progress %': ts.pct, ...Object.fromEntries(STATUSES.map(s => [s, ts.counts[s]])) });
+    });
+  });
+  return rows;
+}
+function stamp() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
+function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+function exportExcel() {
+  index();
+  const items = rowsForExport(), summary = summaryRows();
+  if (window.XLSX) {
+    const wb = XLSX.utils.book_new();
+    const add = (rows, name, widths) => { const ws = XLSX.utils.json_to_sheet(rows); ws['!cols'] = widths.map(w => ({ wch: w })); ws['!autofilter'] = { ref: ws['!ref'] }; XLSX.utils.book_append_sheet(wb, ws, name); };
+    add(summary, 'Summary', [26, 36, 16, 11, 11, 7, 11, ...STATUSES.map(() => 12)]);
+    add(items, 'Work items', [22, 34, 8, 60, 18, 12, 14, 30, 30, 15, 22, 18, 26, 40, 20]);
+    initiatives().forEach(i => {
+      const rows = items.filter(r => r.Initiative === i.name);
+      if (rows.length) add(rows, i.name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31), [22, 34, 8, 60, 18, 12, 14, 30, 30, 15, 22, 18, 26, 40, 20]);
+    });
+    XLSX.writeFile(wb, `Project_AHA_${stamp()}.xlsx`);
+  } else {
+    // Offline fallback: CSV opens directly in Excel.
+    const cols = Object.keys(items[0] || {});
+    const csv = [cols, ...items.map(r => cols.map(c => r[c]))].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    download(`Project_AHA_${stamp()}.csv`, new Blob(['﻿' + csv], { type: 'text/csv' }));
+    toast('Excel library unavailable offline — exported CSV instead (opens in Excel).');
+  }
+}
+function backup() { download(`Project_AHA_backup_${stamp()}.json`, new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' })); }
+function restore(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (!Array.isArray(data.initiatives) || !Array.isArray(data.items)) throw new Error('bad shape');
+      if (!confirm(`Replace current data with backup (${data.initiatives.length} initiatives, ${data.items.length} items)?`)) return;
+      db = data; ui.view = 'overview'; ui.track = 'all'; save(); saveUI(); render(); toast('Backup restored.');
+    } catch { toast('That file is not a valid Project AHA backup.'); }
+  };
+  r.readAsText(file);
+}
+
+let toastTimer;
+function toast(msg) { document.querySelector('.toast')?.remove(); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 3200); }
+
+/* --------------------------------------------------------------- events */
+const app = document.getElementById('app');
+app.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const a = el.dataset.act;
+  if (a === 'view') { ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
+  else if (a === 'track') { ui.track = el.dataset.id; saveUI(); render(); }
+  else if (a === 'mode') { ui.mode = el.dataset.mode; saveUI(); render(); }
+  else if (a === 'collapse') { const id = el.dataset.id; ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter(x => x !== id) : [...ui.collapsed, id]; saveUI(); render(); }
+  else if (a === 'add-item') itemModal({ initiativeId: el.dataset.init, parentId: el.dataset.parent });
+  else if (a === 'edit-item') itemModal({ id: el.dataset.id });
+  else if (a === 'add-init') initModal();
+  else if (a === 'edit-init') initModal(el.dataset.id);
+  else if (a === 'export-xlsx') exportExcel();
+  else if (a === 'backup') backup();
+  else if (a === 'restore') document.getElementById('importFile').click();
+});
+app.addEventListener('change', e => {
+  const el = e.target; const a = el.dataset.act; if (!a) return;
+  if (a === 'status') setStatus(el.dataset.id, el.value);
+  else if (a === 'deadline') setDeadline(el.dataset.id, el.value);
+  else if (a === 'done') toggleDone(el.dataset.id, el.checked);
+  else if (a === 'filter-status') { ui.status = el.value; saveUI(); render(); }
+  else if (a === 'hide-done') { ui.hideDone = el.checked; saveUI(); render(); }
+  else if (a === 'overdue-only') { ui.overdueOnly = el.checked; saveUI(); render(); }
+});
+let searchTimer;
+app.addEventListener('input', e => {
+  if (e.target.dataset.act !== 'search') return;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    ui.search = e.target.value; saveUI(); render();
+    const s = app.querySelector('[data-act=search]'); s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+  }, 200);
+});
+// Board drag & drop
+app.addEventListener('dragstart', e => { const c = e.target.closest('[data-drag]'); if (!c) return; e.dataTransfer.setData('text/plain', c.dataset.drag); c.classList.add('dragging'); });
+app.addEventListener('dragend', e => e.target.closest?.('[data-drag]')?.classList.remove('dragging'));
+app.addEventListener('dragover', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); app.querySelectorAll('.col.over').forEach(c => c !== col && c.classList.remove('over')); col.classList.add('over'); });
+app.addEventListener('dragleave', e => { const col = e.target.closest('[data-drop]'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
+app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) setStatus(id, col.dataset.drop); });
+
+document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+load();
+render();
+</script>
+</body>
+</html>
