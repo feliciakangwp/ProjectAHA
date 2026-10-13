@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <style>
-  /* Layout: summary tiles on top, then a track sidebar beside a checklist / board work area. */
+  /* Layout: summary tiles on top, then a track sidebar beside the two boards (by track, by status). */
   :root {
     --bg: #eef2f6; --surface: #ffffff; --surface-2: #f6f8fb; --border: #dfe5ec; --border-strong: #c5cfdb;
     --ink: #0f1b2d; --ink-2: #33415a; --muted: #5f6d82; --faint: #8f9bad;
@@ -207,27 +207,44 @@
   .work-head h3 { margin: 0; font-size: 18px; }
   .work-head .meta { color: var(--muted); font-size: 13px; }
 
-  /* Checklist */
-  .group { margin-bottom: 18px; }
-  .init-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; margin: 22px 0 8px; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
-  .row.track { background: var(--surface); border-left: 4px solid var(--ink); }
-  .row.done { background: var(--surface-2); }
-  .row.done .name, .row.done .code { color: var(--faint); text-decoration: line-through; }
-  .row.done .meta-line, .row.done select.status { opacity: .6; }
-  .row .main { flex: 1; min-width: 0; }
-  .row .name { font-weight: 600; }
-  .row.track .name { font-size: 15.5px; }
+  /* Shared item bits */
   .meta-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
   .tag { white-space: nowrap; display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--tag-bg); color: var(--tag-ink); font-weight: 500; }
   .tag.link { background: var(--info-soft); color: var(--info-ink); }
   .tag.derived { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
-  .row .right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .row input[type=date] { border: 1px solid var(--border); border-radius: 7px; padding: 3px 6px; font-size: 12.5px; background: var(--surface); color: var(--ink-2); }
+  input[type=date].dl-input { border: 1px solid var(--border); border-radius: 7px; padding: 3px 6px; font-size: 12.5px; background: var(--surface); color: var(--ink-2); max-width: 100%; }
   .cb { width: 20px; height: 20px; accent-color: var(--s-done); flex: none; }
-  .toggle { width: 22px; height: 22px; border: 0; background: transparent; color: var(--muted); border-radius: 6px; flex: none; font-size: 12px; padding: 0; }
-  .toggle:hover { background: var(--surface-2); }
-  .toggle.blank { visibility: hidden; }
+  .toggle { border: 0; background: transparent; color: var(--muted); border-radius: 6px; font-size: 12px; padding: 2px 6px; }
+  .toggle:hover { background: var(--surface-2); color: var(--ink); }
+
+  /* Track board: one column per track (or per initiative on the overview) */
+  .tboard { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(300px, 340px); gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: start; }
+  .tcol { background: var(--col); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 78vh; }
+  .tcol-head { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 4px solid var(--tc, var(--border-strong)); }
+  .tcol-head .t { font-weight: 700; font-size: 15px; line-height: 1.3; }
+  .tcol-head.linkcol { border-top-color: var(--info-ink); }
+  .tcol-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 40px; padding-right: 2px; }
+  .tcol-empty { font-size: 12.5px; color: var(--muted); text-align: center; padding: 14px 6px; border: 1px dashed var(--border-strong); border-radius: 10px; }
+  .ctrls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ctrls .grow { flex: 1; }
+  .mini-bar { height: 5px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .mini-bar > div { height: 100%; background: var(--s-done); }
+  .icard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; border-left: 3px solid var(--sc, var(--border)); }
+  .icard.done { background: var(--surface-2); }
+  .icard.done > .ihead .name { color: var(--faint); text-decoration: line-through; }
+  .ihead { display: flex; gap: 8px; align-items: flex-start; }
+  .ihead .name { font-weight: 600; flex: 1; min-width: 0; line-height: 1.35; }
+  .ihead .name a { color: inherit; text-decoration: none; }
+  .ihead .name a:hover { text-decoration: underline; }
+  .subs { border-top: 1px solid var(--border); padding-top: 6px; display: flex; flex-direction: column; }
+  .srow { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; }
+  .srow + .srow { border-top: 1px dashed var(--border); }
+  .srow .nm { flex: 1; min-width: 0; line-height: 1.3; }
+  .srow.done .nm { color: var(--faint); text-decoration: line-through; }
+  .srow .cb { width: 16px; height: 16px; }
+  .srow select.status { font-size: 11.5px; padding: 1px 4px; max-width: 118px; }
+  .srow .btn.sm { padding: 2px 7px; font-size: 12px; }
+  .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
 
   /* Board */
   .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
@@ -267,8 +284,7 @@
   @media (max-width: 640px) {
     .wrap { padding: 16px 16px 48px; }
     h1 { font-size: 24px; }
-    .row { flex-wrap: wrap; }
-    .row .right { width: 100%; justify-content: flex-start; }
+    .tboard { grid-auto-columns: minmax(260px, 86vw); }
     .two { grid-template-columns: 1fr; }
     .inits { grid-template-columns: 1fr; }
   }
@@ -335,8 +351,10 @@ const canEdit = () => store.isEditor;
 
 function loadUI() {
   try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
-  ui = Object.assign({ view: 'overview', track: 'all', mode: 'checklist', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [] }, ui);
+  ui = Object.assign({ view: 'overview', track: 'all', mode: 'tracks', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [] }, ui);
+  normalizeMode();
 }
+function normalizeMode() { if (ui.mode === 'board') ui.mode = 'status'; if (ui.mode !== 'status') ui.mode = 'tracks'; }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
 
 // Database rows use snake_case; the page uses camelCase.
@@ -870,7 +888,7 @@ function renderOverview(inits) {
       <div class="card dl">
         <div style="padding:6px 18px 8px;font-weight:600">Overdue & due in next 14 days</div>
         ${upcoming.length ? upcoming.map(({ l }) => `<div class="dl-item" ${canEdit() ? `data-act="edit-item" data-id="${l.id}"` : 'style="cursor:default"'}><div><div class="nm">${esc(l.name)}</div><div class="path">${esc(pathText(l))}</div></div>${dueChip(l)}</div>`).join('')
-          : '<div class="empty">No open items due in the next 14 days. Set deadlines from the checklist or the Edit dialog.</div>'}
+          : '<div class="empty">No open items due in the next 14 days. Set deadlines on the cards or in the Edit dialog.</div>'}
       </div>
     </div>
     <div class="section-title"><h2>All work</h2><span class="meta">Every initiative in one list</span></div>`;
@@ -879,11 +897,11 @@ function renderOverview(inits) {
 function renderInitiativeHeader(init) {
   const linked = db.items.filter(i => (i.links || []).includes(init.id) && i.initiativeId !== init.id);
   return `${kpiCards(leavesOfInit(init.id), init.name + ' progress')}
-    ${linked.length ? `<div class="banner info">${linked.length} item${linked.length > 1 ? 's' : ''} from other initiatives ${linked.length > 1 ? 'are' : 'is'} linked here (shown at the bottom of the checklist; not counted in this initiative’s progress).</div>` : ''}
+    ${linked.length ? `<div class="banner info">${linked.length} item${linked.length > 1 ? 's' : ''} from other initiatives ${linked.length > 1 ? 'are' : 'is'} linked here (shown in the last column of the By track board; not counted in this initiative’s progress).</div>` : ''}
     <div style="height:20px"></div>`;
 }
 
-/* Work panel: sidebar + checklist/board, scoped to one initiative or all. */
+/* Work panel: sidebar + track board / status board, scoped to one initiative or all. */
 function renderWork(cur) {
   const sideEntries = cur
     ? tracksOf(cur.id).map(t => ({ id: t.id, label: `${codeOf(t)}. ${t.name}`, count: leavesUnder(t).length, status: effStatus(t) }))
@@ -913,10 +931,10 @@ function renderWork(cur) {
         <select data-act="filter-status"><option value="all">All statuses</option>${STATUSES.map(s => `<option ${ui.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
         <label class="chk"><input type="checkbox" data-act="hide-done" ${ui.hideDone ? 'checked' : ''}> Hide completed / void</label>
         <label class="chk"><input type="checkbox" data-act="overdue-only" ${ui.overdueOnly ? 'checked' : ''}> Overdue only</label>
-        <div class="seg"><button class="${ui.mode === 'checklist' ? 'on' : ''}" data-act="mode" data-mode="checklist">Checklist</button><button class="${ui.mode === 'board' ? 'on' : ''}" data-act="mode" data-mode="board">Board</button></div>
+        <div class="seg" role="tablist" aria-label="Board view"><button class="${ui.mode === 'tracks' ? 'on' : ''}" data-act="mode" data-mode="tracks" title="${cur ? 'One column per track' : 'One column per initiative'}">${cur ? 'By track' : 'By initiative'}</button><button class="${ui.mode === 'status' ? 'on' : ''}" data-act="mode" data-mode="status" title="One column per status">By status</button></div>
       </div>
       <div class="work-head"><h3>${sel ? esc(sel.label) : (cur ? 'All tracks' : 'All initiatives')}</h3><span class="meta" id="countMeta"></span></div>
-      ${ui.mode === 'board' ? renderBoard(cur) : renderChecklist(cur)}
+      ${ui.mode === 'status' ? renderBoard(cur) : renderTrackBoard(cur)}
     </section>
   </div>`;
 }
@@ -946,39 +964,6 @@ function rootsInScope(cur) {
   return initiatives().filter(i => ui.track === 'all' || i.id === ui.track).flatMap(i => tracksOf(i.id));
 }
 
-function rowHTML(item, depth, opts = {}) {
-  const s = effStatus(item), closed = isClosed(s), kids = hasKids(item);
-  const collapsed = ui.collapsed.includes(item.id);
-  const leafCount = kids ? leavesUnder(item) : null;
-  const ls = kids ? stats(leafCount) : null;
-  const linkTags = (item.links || []).map(l => IDX.initById.get(l)).filter(Boolean).filter(l => l.id !== item.initiativeId)
-    .map(l => `<span class="tag link" title="Linked initiative">↔ ${esc(l.name)}</span>`).join('');
-  const fromTag = opts.linkedFrom ? `<span class="tag">From ${esc(opts.linkedFrom)}</span>` : '';
-  return `<div class="row ${depth === 0 ? 'track' : ''} ${closed ? 'done' : ''}" style="margin-left:${depth * 28}px">
-    <button class="toggle ${kids ? '' : 'blank'}" data-act="collapse" data-id="${item.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▶' : '▼'}</button>
-    <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : !canEdit() ? 'disabled' : ''}>
-    <div class="main">
-      <div class="name"><span class="code">${opts.linkedFrom ? '' : (depth === 0 ? 'Track ' : '')}${codeOf(item)}</span>${esc(item.name)}</div>
-      <div class="meta-line">
-        ${opts.path ? `<span>${esc(opts.path)}</span>` : ''}
-        ${fromTag}
-        ${kids ? `<span class="tag derived" title="Status rolled up from sub-items">${ls.done}/${ls.live} sub-items done · rolled up</span>` : ''}
-        ${item.owner ? `<span>👤 ${esc(item.owner)}</span>` : ''}
-        ${linkTags}
-        ${item.notes ? `<span title="${esc(item.notes)}">📝 ${esc(item.notes.length > 60 ? item.notes.slice(0, 60) + '…' : item.notes)}</span>` : ''}
-      </div>
-    </div>
-    <div class="right">
-      ${dueChip(item)}
-      <input type="date" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline" ${canEdit() ? '' : 'disabled'}>
-      ${statusSelect(item)}
-      ${canEdit() && opts.unlinkFrom ? `<button class="btn sm ghost" data-act="unlink" data-id="${item.id}" data-init="${opts.unlinkFrom}" title="Stop showing this item here">Unlink</button>` : ''}
-      ${canEdit() ? `<button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
-      <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button>` : ''}
-    </div>
-  </div>`;
-}
-
 // Items from other initiatives linked into `cur`. If an item and one of its
 // ancestors are both linked, only the ancestor is listed (its subtree covers it).
 function linkedRoots(cur) {
@@ -992,32 +977,130 @@ function linkSource(item, initId) {
   return [item, ...ancestors(item).reverse()].find(x => (x.links || []).includes(initId)) || null;
 }
 
-function renderChecklist(cur) {
+/* Track board ("By track" / "By initiative"): columns are tracks (or initiatives on
+   the overview); each card is one item with its own sub-items listed inside it, so a
+   long list becomes several short columns instead of one long page. */
+function renderTrackBoard(cur) {
   const memo = new Map();
-  let shown = 0;
-  const walk = (item, depth, opts) => {
-    if (!visible(item, memo)) return '';
-    shown++;
-    let html = rowHTML(item, depth, opts);
-    if (!ui.collapsed.includes(item.id) || filtersActive()) html += childrenOf(item.id).map(c => walk(c, depth + 1)).join('');
-    return html;
-  };
-  let html = '';
+  let cardCount = 0;
+  const show = i => visible(i, memo);
+  const cardsFor = (list, opts) => list.filter(show).map(i => { cardCount++; return itemCard(i, opts, show); }).join('');
+  let cols = '';
   if (cur) {
-    html = rootsInScope(cur).map(t => `<div class="group">${walk(t, 0)}</div>`).join('');
+    cols = rootsInScope(cur).filter(show).map(t => trackColumn(t, cardsFor(childrenOf(t.id), {}))).join('');
     if (ui.track === 'all') {
-      const linked = linkedRoots(cur).filter(i => visible(i, memo));
-      if (linked.length) html += `<div class="init-label">Linked from other initiatives</div>` + linked.map(l =>
-        `<div class="group">${walk(l, 0, { linkedFrom: IDX.initById.get(l.initiativeId)?.name || 'another initiative', path: pathText(l), unlinkFrom: cur.id })}</div>`).join('');
+      const linked = linkedRoots(cur).filter(show);
+      if (linked.length) cols += `<section class="tcol" aria-label="Linked from other initiatives">
+        <div class="tcol-head linkcol"><div class="group-label">Linked from other initiatives</div>
+          <div class="meta-line">Shown here, counted in their own initiative.</div></div>
+        <div class="tcol-body">${cardsFor(linked, { linkedInto: cur })}</div></section>`;
     }
   } else {
-    html = initiatives().filter(i => ui.track === 'all' || i.id === ui.track).map(i => {
-      const body = tracksOf(i.id).map(t => walk(t, 0)).join('');
-      return body ? `<div class="init-label">${esc(i.name)}</div>${body}` : '';
-    }).join('');
+    cols = initiatives().filter(i => ui.track === 'all' || i.id === ui.track)
+      .map(i => initiativeColumn(i, cardsFor(tracksOf(i.id), { trackCard: true }))).join('');
   }
-  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${shown} row${shown === 1 ? '' : 's'}`; });
-  return html || `<div class="card empty">${filtersActive() ? 'No items match the filters.' : 'No tracks yet. Use “+ Add track” to create one.'}</div>`;
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cardCount} card${cardCount === 1 ? '' : 's'} · scroll sideways for more columns`; });
+  if (!cols) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : cur ? (canEdit() ? 'No tracks yet. Use “+ Add track” to create one.' : 'No tracks yet.') : 'No initiatives yet.'}</div>`;
+  return `<div class="tboard">${cols}</div>`;
+}
+
+function progressLine(item) {
+  const st = stats(leavesUnder(item));
+  return `<div class="meta-line" style="justify-content:space-between"><span>${st.done}/${st.live} done</span><b style="color:var(--ink)">${st.pct}%</b></div>
+    <div class="mini-bar" aria-hidden="true"><div style="width:${st.pct}%"></div></div>`;
+}
+
+function trackColumn(t, cardsHTML) {
+  const s = effStatus(t), kids = hasKids(t);
+  return `<section class="tcol" aria-label="Track ${esc(codeOf(t))} ${esc(t.name)}">
+    <div class="tcol-head ${isClosed(s) ? 'done' : ''}" style="--tc:${STATUS_META[s].color}">
+      <div class="ihead">
+        <input type="checkbox" class="cb" data-act="done" data-id="${t.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'} aria-label="Mark track completed">
+        <div class="t name"><span class="code">Track ${codeOf(t)}</span>${esc(t.name)}</div>
+      </div>
+      ${itemMeta(t)}
+      ${kids ? progressLine(t) : ''}
+      <div class="ctrls">${statusSelect(t)}${dueChip(t)}</div>
+      ${canEdit() ? `<div class="ctrls">${dateInput(t)}<span class="grow"></span>
+        <button class="btn sm ghost" data-act="add-item" data-init="${t.initiativeId}" data-parent="${t.id}" title="Add a sub-item to this track">+ Sub</button>
+        <button class="btn sm" data-act="edit-item" data-id="${t.id}">Edit</button></div>` : ''}
+    </div>
+    <div class="tcol-body">${cardsHTML || `<div class="tcol-empty">${kids ? 'No sub-items match the filters.' : 'No sub-items yet.' + (canEdit() ? ' Use “+ Sub” to break this track down.' : '')}</div>`}</div>
+  </section>`;
+}
+
+function initiativeColumn(init, cardsHTML) {
+  const tracks = tracksOf(init.id), low = lowestStatus(tracks);
+  const st = stats(leavesOfInit(init.id));
+  return `<section class="tcol" aria-label="${esc(init.name)}">
+    <div class="tcol-head" style="--tc:${low ? STATUS_META[low].color : 'var(--border-strong)'}">
+      <div class="ihead"><div class="t name"><a href="#" data-act="view" data-view="${init.id}" title="Open ${esc(init.name)}">${esc(init.name)}</a></div>${low ? statusPill(low) : ''}</div>
+      ${init.description ? `<div class="meta-line">${esc(init.description)}</div>` : ''}
+      <div class="meta-line" style="justify-content:space-between"><span>${st.done}/${st.live} work items done · ${tracks.length} track${tracks.length === 1 ? '' : 's'}</span><b style="color:var(--ink)">${st.pct}%</b></div>
+      <div class="mini-bar" aria-hidden="true"><div style="width:${st.pct}%"></div></div>
+      ${canEdit() ? `<div class="ctrls"><span class="grow"></span><button class="btn sm ghost" data-act="add-item" data-init="${init.id}">+ Track</button><button class="btn sm" data-act="edit-init" data-id="${init.id}">Edit</button></div>` : ''}
+    </div>
+    <div class="tcol-body">${cardsHTML || `<div class="tcol-empty">${tracks.length ? 'No tracks match the filters.' : 'No tracks yet.'}</div>`}</div>
+  </section>`;
+}
+
+const dateInput = item => `<input type="date" class="dl-input" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline for ${esc(item.name)}" ${canEdit() ? '' : 'disabled'}>`;
+
+function itemMeta(item, opts = {}) {
+  const kids = hasKids(item);
+  const ls = kids && !opts.noRollup ? stats(leavesUnder(item)) : null;
+  const linkTags = (item.links || []).map(l => IDX.initById.get(l)).filter(Boolean).filter(l => l.id !== item.initiativeId)
+    .map(l => `<span class="tag link" title="Linked initiative">↔ ${esc(l.name)}</span>`).join('');
+  const bits = [
+    opts.path ? `<span>${esc(opts.path)}</span>` : '',
+    opts.fromTag || '',
+    ls ? `<span class="tag derived" title="Status rolled up from sub-items">${ls.done}/${ls.live} sub-items done</span>` : '',
+    item.owner ? `<span>👤 ${esc(item.owner)}</span>` : '',
+    linkTags,
+    item.notes ? `<span title="${esc(item.notes)}">📝 ${esc(item.notes.length > 60 ? item.notes.slice(0, 60) + '…' : item.notes)}</span>` : '',
+  ].filter(Boolean).join('');
+  return bits ? `<div class="meta-line">${bits}</div>` : '';
+}
+
+// One card: the item, its controls, and its sub-items (any depth) as compact rows.
+function itemCard(item, opts, show) {
+  const s = effStatus(item), kids = hasKids(item), collapsed = ui.collapsed.includes(item.id);
+  const linkedInto = opts.linkedInto;
+  const fromTag = linkedInto ? `<span class="tag">From ${esc(IDX.initById.get(item.initiativeId)?.name || 'another initiative')}</span>` : '';
+  const title = opts.trackCard
+    ? `<a href="#" data-act="open-track" data-init="${item.initiativeId}" data-id="${item.id}" title="Open this track"><span class="code">Track ${codeOf(item)}</span>${esc(item.name)}</a>`
+    : `<span class="code">${codeOf(item)}</span>${esc(item.name)}`;
+  const subRows = [];
+  const walk = (parent, depth) => childrenOf(parent.id).filter(show).forEach(c => { subRows.push(subRow(c, depth)); if (!ui.collapsed.includes(c.id) || filtersActive()) walk(c, depth + 1); });
+  if (kids && (!collapsed || filtersActive())) walk(item, 0);
+  const nSubs = descendants(item).length;
+  return `<article class="icard ${isClosed(s) ? 'done' : ''}" style="--sc:${STATUS_META[s].color}">
+    <div class="ihead">
+      <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'} aria-label="Mark completed">
+      <div class="name">${title}</div>
+    </div>
+    ${itemMeta(item, { path: linkedInto ? pathText(item) : '', fromTag })}
+    <div class="ctrls">${statusSelect(item)}${dueChip(item)}</div>
+    ${canEdit() ? `<div class="ctrls">${dateInput(item)}<span class="grow"></span>
+      ${linkedInto ? `<button class="btn sm ghost" data-act="unlink" data-id="${item.id}" data-init="${linkedInto.id}" title="Stop showing this item in ${esc(linkedInto.name)}">Unlink</button>` : ''}
+      <button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
+      <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button></div>`
+      : (item.deadline ? `<div class="meta-line">Deadline ${esc(fmtDate(item.deadline))}</div>` : '')}
+    ${kids ? `<div class="subs">
+      <button class="toggle" data-act="collapse" data-id="${item.id}" aria-expanded="${!collapsed}" style="align-self:flex-start">${collapsed ? '▶' : '▼'} ${nSubs} sub-item${nSubs === 1 ? '' : 's'}</button>
+      ${subRows.join('')}</div>` : ''}
+  </article>`;
+}
+
+function subRow(item, depth) {
+  const s = effStatus(item), kids = hasKids(item), collapsed = ui.collapsed.includes(item.id);
+  return `<div class="srow ${isClosed(s) ? 'done' : ''}" style="padding-left:${depth * 16}px">
+    ${kids ? `<button class="toggle" data-act="collapse" data-id="${item.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${esc(codeOf(item))}" style="padding:0 2px">${collapsed ? '▶' : '▼'}</button>` : ''}
+    <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'} aria-label="Mark ${esc(codeOf(item))} completed">
+    <span class="nm" title="${esc(item.name)}${item.notes ? ' — ' + esc(item.notes) : ''}"><span class="code">${codeOf(item)}</span>${esc(item.name)} ${dueChip(item)}</span>
+    ${statusSelect(item)}
+    ${canEdit() ? `<button class="btn sm ghost" data-act="edit-item" data-id="${item.id}" aria-label="Edit ${esc(codeOf(item))}">Edit</button>` : ''}
+  </div>`;
 }
 
 function renderBoard(cur) {
@@ -1117,7 +1200,7 @@ function itemModal({ id, initiativeId, parentId }) {
       <div class="field"><label>Owner</label><input type="text" name="owner" value="${esc(item?.owner || '')}" placeholder="Optional"></div>
       <div class="field"><label>Notes</label><textarea name="notes" placeholder="Optional">${esc(item?.notes || '')}</textarea></div>
       ${others.length ? `<div class="field"><label>Also linked to initiative</label><div class="checks">${others.map(o => `<label><input type="checkbox" name="links" value="${o.id}" ${(item?.links || []).includes(o.id) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('')}</div>
-        <div class="help">Linked items, with their sub-items, also appear in that initiative’s checklist and board.</div>
+        <div class="help">Linked items, with their sub-items, also appear on that initiative’s boards.</div>
         ${item ? others.map(o => { const src = ancestors(item).reverse().find(x => (x.links || []).includes(o.id)); return src ? `<div class="help">Also shown in ${esc(o.name)} because its parent ${esc(codeOf(src))} ${esc(src.name)} is linked. Unlink ${esc(codeOf(src))} to remove it there.</div>` : ''; }).join('') : ''}</div>` : ''}
     </div>
     <footer>
@@ -1320,13 +1403,14 @@ app.addEventListener('click', e => {
   const a = el.dataset.act;
   if (EDIT_ACTIONS.has(a) && !canEdit()) return;
   if (a === 'sign-out') { signOut(); return; }
-  if (a === 'view') { ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
+  if (a === 'view') { e.preventDefault(); ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'track') { ui.track = el.dataset.id; saveUI(); render(); }
-  else if (a === 'mode') { ui.mode = el.dataset.mode; saveUI(); render(); }
+  else if (a === 'mode') { ui.mode = el.dataset.mode; normalizeMode(); saveUI(); render(); }
   else if (a === 'collapse') { const id = el.dataset.id; ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter(x => x !== id) : [...ui.collapsed, id]; saveUI(); render(); }
   else if (a === 'add-item') itemModal({ initiativeId: el.dataset.init, parentId: el.dataset.parent });
   else if (a === 'edit-item') itemModal({ id: el.dataset.id });
   else if (a === 'unlink') unlinkItem(el.dataset.id, el.dataset.init);
+  else if (a === 'open-track') { e.preventDefault(); ui.view = el.dataset.init; ui.track = el.dataset.id; ui.mode = 'tracks'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'add-init') initModal();
   else if (a === 'edit-init') initModal(el.dataset.id);
   else if (a === 'export-xlsx') exportExcel();

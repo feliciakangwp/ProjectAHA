@@ -6,7 +6,9 @@ Data is stored in Supabase; people sign in with email and password.
 
 ## Features
 - **Overview** of Project AHA: overall progress, status mix, initiative cards with per-track status, overdue / upcoming deadlines.
-- **Initiative view** with a **Checklist** (nested tree) and **Board** (drag cards between status columns).
+- **Two boards on every tab:**
+  - **By track** (on the overview, **By initiative**): one column per track or initiative. Each card lists its sub-items compactly and can be collapsed.
+  - **By status**: one column per status; drag cards to change status.
 - **Unlimited nesting**: Track 1 → 1a → 1a.1 → 1a.1.1 … Codes renumber automatically.
 - **Roll-up status**: a track or parent item shows the *lowest* status of its sub-items
   (Thoughts < Pending User < Planning < Developing < IT Testing < User Testing < Completed). Void items are ignored.
