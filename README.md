@@ -8,6 +8,7 @@ Data is stored in Supabase; people sign in with email and password.
 - **Overview** of Project AHA: overall progress, status mix, initiative cards with per-track status, overdue / upcoming deadlines.
 - **Two boards on every tab:**
   - **By track** (on the overview, **By initiative**): one column per track or initiative. Each card lists its sub-items compactly and can be collapsed.
+    Editors can add straight from the board: **+ Add 1d** at the foot of a track column adds the next item, and **+ Add Track 7** at the end of the board adds the next track.
   - **By status**: one column per status; drag cards to change status.
 - **Unlimited nesting**: Track 1 → 1a → 1a.1 → 1a.1.1 … Codes renumber automatically.
 - **Roll-up status**: a track or parent item shows the *lowest* status of its sub-items

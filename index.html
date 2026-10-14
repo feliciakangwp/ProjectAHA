@@ -244,6 +244,14 @@
   .srow .cb { width: 16px; height: 16px; }
   .srow select.status { font-size: 11.5px; padding: 1px 4px; max-width: 118px; }
   .srow .btn.sm { padding: 2px 7px; font-size: 12px; }
+  .qa { display: flex; flex-direction: column; gap: 6px; }
+  .qa-btn { width: 100%; text-align: left; border: 1px dashed var(--border-strong); background: transparent; color: var(--primary); border-radius: 10px; padding: 9px 12px; font-weight: 600; }
+  .qa-btn:hover { background: var(--surface); border-style: solid; }
+  .qa-form { background: var(--surface); border: 1px solid var(--primary); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow); }
+  .qa-form label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .qa-form input { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .qa-form .help { font-size: 11.5px; color: var(--muted); }
+  .tcol-add { background: transparent; border: 2px dashed var(--border); }
   .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
 
   /* Board */
@@ -791,6 +799,7 @@ function render() {
   if (ui.view !== 'overview' && !IDX.initById.has(ui.view)) { ui.view = 'overview'; ui.track = 'all'; }
   const app = document.getElementById('app');
   const kept = captureScroll(app);
+  const hadQaFocus = document.activeElement && document.activeElement.id === 'qa-input';
   const inits = initiatives();
   const cur = ui.view === 'overview' ? null : IDX.initById.get(ui.view);
   const title = cur ? `What’s next for ${esc(cur.name)}?` : 'Project AHA — Finance Transformation';
@@ -825,6 +834,7 @@ function render() {
     ${renderWork(cur)}`}
   `;
   restoreScroll(app, kept);
+  if (quickAdd.key && hadQaFocus) focusQuickAdd(false);
 }
 
 // Re-rendering replaces the board, which would reset where the person had scrolled
@@ -1006,6 +1016,7 @@ function renderTrackBoard(cur) {
   let cols = '';
   if (cur) {
     cols = rootsInScope(cur).filter(show).map(t => trackColumn(t, cardsFor(childrenOf(t.id), {}))).join('');
+    if (ui.track === 'all' && canEdit()) cols += `<section class="tcol tcol-add" aria-label="Add a track">${quickAddHTML(cur.id, null)}</section>`;
     if (ui.track === 'all') {
       const linked = linkedRoots(cur).filter(show);
       if (linked.length) cols += `<section class="tcol" aria-label="Linked from other initiatives">
@@ -1018,8 +1029,53 @@ function renderTrackBoard(cur) {
       .map(i => initiativeColumn(i, cardsFor(tracksOf(i.id), { trackCard: true }))).join('');
   }
   queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cardCount} card${cardCount === 1 ? '' : 's'} · scroll sideways for more columns`; });
-  if (!cols) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : cur ? (canEdit() ? 'No tracks yet. Use “+ Add track” to create one.' : 'No tracks yet.') : 'No initiatives yet.'}</div>`;
+  if (!cols) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : cur ? 'No tracks yet.' : 'No initiatives yet.'}</div>`;
   return `<div class="tboard" data-scroll-key="track-board:${ui.view}:${ui.track}">${cols}</div>`;
+}
+
+/* Quick add: a "+ Add 1d" / "+ Add Track 7" button at the foot of a column that
+   opens a one-line name box. Enter creates the item with the next code and keeps
+   the box open for the next one; Esc or Cancel closes it. */
+const quickAdd = { key: null, value: '', busy: false };
+const qaKey = (initId, parentId) => parentId || 'tracks:' + initId;
+function nextCodeLabel(initId, parentId) {
+  if (!parentId) return 'Track ' + (tracksOf(initId).length + 1);
+  const parent = IDX.byId.get(parentId), n = childrenOf(parentId).length;
+  return parent.parentId ? `${codeOf(parent)}.${n + 1}` : codeOf(parent) + letters(n);
+}
+function quickAddHTML(initId, parentId) {
+  const key = qaKey(initId, parentId), next = nextCodeLabel(initId, parentId);
+  const where = parentId ? `under ${codeOf(IDX.byId.get(parentId))}` : `to ${IDX.initById.get(initId)?.name || ''}`;
+  if (quickAdd.key !== key) return `<div class="qa"><button class="qa-btn" data-act="qa-open" data-key="${key}" title="Add ${esc(next)} ${esc(where)}">+ Add ${esc(next)}</button></div>`;
+  return `<form class="qa qa-form" data-qa-form data-init="${initId}" data-parent="${parentId || ''}" autocomplete="off">
+    <label for="qa-input">New ${parentId ? 'item' : 'track'} <span class="code">${esc(next)}</span></label>
+    <input id="qa-input" data-qa-input type="text" placeholder="${parentId ? 'Item name' : 'Track name'}" value="${esc(quickAdd.value)}" ${quickAdd.busy ? 'disabled' : ''}>
+    <div class="ctrls"><button class="btn sm primary" type="submit">Add ${esc(next)}</button><button class="btn sm" type="button" data-act="qa-close">Cancel</button>
+      <span class="help">Starts as Thoughts · Enter adds, Esc closes</span></div>
+  </form>`;
+}
+function openQuickAdd(key) { quickAdd.key = key; quickAdd.value = ''; render(); focusQuickAdd(true); }
+function closeQuickAdd() { if (!quickAdd.key) return; quickAdd.key = null; quickAdd.value = ''; render(); }
+function focusQuickAdd(reveal) {
+  const input = document.getElementById('qa-input'); if (!input) return;
+  input.focus({ preventScroll: !reveal });
+  input.setSelectionRange(input.value.length, input.value.length);
+  if (reveal) input.closest('.qa-form').scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+async function submitQuickAdd(form) {
+  const name = quickAdd.value.trim();
+  if (!name) { closeQuickAdd(); return; }
+  const initId = form.dataset.init, parentId = form.dataset.parent || null;
+  const code = nextCodeLabel(initId, parentId);
+  const now = new Date().toISOString();
+  const created = { id: uid(), initiativeId: initId, parentId, name, status: 'Thoughts', deadline: '', owner: '', notes: '', links: [], order: nextOrder(initId, parentId), createdAt: now, updatedAt: now };
+  db.items.push(created);
+  if (parentId) ui.collapsed = ui.collapsed.filter(c => c !== parentId);
+  quickAdd.value = '';
+  commit({ items: [created] });
+  render();
+  focusQuickAdd(true); // ready for the next one
+  toast(`Added ${code} ${name}${filtersActive() && !matches(IDX.byId.get(created.id) || created) ? ' (hidden by the current filters)' : ''}.`);
 }
 
 function progressLine(item) {
@@ -1043,7 +1099,8 @@ function trackColumn(t, cardsHTML) {
         <button class="btn sm ghost" data-act="add-item" data-init="${t.initiativeId}" data-parent="${t.id}" title="Add a sub-item to this track">+ Sub</button>
         <button class="btn sm" data-act="edit-item" data-id="${t.id}">Edit</button></div>` : ''}
     </div>
-    <div class="tcol-body" data-scroll-key="col-${t.id}">${cardsHTML || `<div class="tcol-empty">${kids ? 'No sub-items match the filters.' : 'No sub-items yet.' + (canEdit() ? ' Use “+ Sub” to break this track down.' : '')}</div>`}</div>
+    <div class="tcol-body" data-scroll-key="col-${t.id}">${cardsHTML || (kids ? '<div class="tcol-empty">No sub-items match the filters.</div>' : canEdit() ? '' : '<div class="tcol-empty">No sub-items yet.</div>')}</div>
+    ${canEdit() ? quickAddHTML(t.initiativeId, t.id) : ''}
   </section>`;
 }
 
@@ -1058,7 +1115,8 @@ function initiativeColumn(init, cardsHTML) {
       <div class="mini-bar" aria-hidden="true"><div style="width:${st.pct}%"></div></div>
       ${canEdit() ? `<div class="ctrls"><span class="grow"></span><button class="btn sm ghost" data-act="add-item" data-init="${init.id}">+ Track</button><button class="btn sm" data-act="edit-init" data-id="${init.id}">Edit</button></div>` : ''}
     </div>
-    <div class="tcol-body" data-scroll-key="col-${init.id}">${cardsHTML || `<div class="tcol-empty">${tracks.length ? 'No tracks match the filters.' : 'No tracks yet.'}</div>`}</div>
+    <div class="tcol-body" data-scroll-key="col-${init.id}">${cardsHTML || (tracks.length ? '<div class="tcol-empty">No tracks match the filters.</div>' : canEdit() ? '' : '<div class="tcol-empty">No tracks yet.</div>')}</div>
+    ${canEdit() ? quickAddHTML(init.id, null) : ''}
   </section>`;
 }
 
@@ -1413,7 +1471,7 @@ function toast(msg) { document.querySelector('.toast')?.remove(); const t = docu
 
 /* --------------------------------------------------------------- events */
 const app = document.getElementById('app');
-const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore', 'unlink']);
+const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore', 'unlink', 'qa-open']);
 app.addEventListener('click', e => {
   const authBtn = e.target.closest('[data-auth]');
   if (authBtn) { if (authBtn.dataset.auth === 'forgot') forgotPassword(); else { auth.screen = 'signin'; auth.message = ''; render(); } return; }
@@ -1421,13 +1479,15 @@ app.addEventListener('click', e => {
   const a = el.dataset.act;
   if (EDIT_ACTIONS.has(a) && !canEdit()) return;
   if (a === 'sign-out') { signOut(); return; }
-  if (a === 'view') { e.preventDefault(); ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
+  if (a === 'view') { e.preventDefault(); quickAdd.key = null; ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'track') { ui.track = el.dataset.id; saveUI(); render(); }
   else if (a === 'mode') { ui.mode = el.dataset.mode; normalizeMode(); saveUI(); render(); }
   else if (a === 'collapse') { const id = el.dataset.id; ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter(x => x !== id) : [...ui.collapsed, id]; saveUI(); render(); }
   else if (a === 'add-item') itemModal({ initiativeId: el.dataset.init, parentId: el.dataset.parent });
   else if (a === 'edit-item') itemModal({ id: el.dataset.id });
   else if (a === 'unlink') unlinkItem(el.dataset.id, el.dataset.init);
+  else if (a === 'qa-open') openQuickAdd(el.dataset.key);
+  else if (a === 'qa-close') closeQuickAdd();
   else if (a === 'open-track') { e.preventDefault(); ui.view = el.dataset.init; ui.track = el.dataset.id; ui.mode = 'tracks'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'add-init') initModal();
   else if (a === 'edit-init') initModal(el.dataset.id);
@@ -1435,7 +1495,11 @@ app.addEventListener('click', e => {
   else if (a === 'backup') backup();
   else if (a === 'restore') document.getElementById('importFile').click();
 });
-app.addEventListener('submit', e => { e.preventDefault(); if (e.target.id === 'authForm' && !auth.busy) handleAuthSubmit(e.target); });
+app.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.id === 'authForm' && !auth.busy) handleAuthSubmit(e.target);
+  else if (e.target.matches('[data-qa-form]') && canEdit()) submitQuickAdd(e.target);
+});
 app.addEventListener('change', e => {
   const el = e.target; const a = el.dataset.act; if (!a) return;
   if ((a === 'status' || a === 'deadline' || a === 'done') && !canEdit()) { render(); return; }
@@ -1448,6 +1512,7 @@ app.addEventListener('change', e => {
 });
 let searchTimer;
 app.addEventListener('input', e => {
+  if (e.target.matches('[data-qa-input]')) { quickAdd.value = e.target.value; return; }
   if (e.target.dataset.act !== 'search') return;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
@@ -1463,7 +1528,7 @@ app.addEventListener('dragleave', e => { const col = e.target.closest('[data-dro
 app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id && canEdit() && IDX.byId.has(id) && !hasKids(IDX.byId.get(id))) setStatus(id, col.dataset.drop); });
 
 document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (document.getElementById('modal')) closeModal(); else closeQuickAdd(); } });
 
 initAuth();
 </script>
