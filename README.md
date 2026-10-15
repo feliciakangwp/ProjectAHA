@@ -12,7 +12,9 @@ Data is stored in Supabase; people sign in with email and password.
   - **By status**: one column per status; drag cards to change status.
   - **Roadmap**: a timeline per initiative (and across all initiatives on the overview). One lane per track,
     one row per item, drawn from its start date to its deadline; a deadline alone shows as a milestone.
-    Months / Quarters zoom, a today line, overdue outlines, and undated items listed so nothing is hidden.
+    A today line, overdue outlines, and undated items listed so nothing is hidden.
+    **Next 2 quarters** switches to a simple board: Overdue, This quarter and Next quarter, with open items
+    placed by deadline and grouped by track.
 - **Unlimited nesting**: Track 1 → 1a → 1a.1 → 1a.1.1 … Codes renumber automatically.
 - **Roll-up status**: a track or parent item shows the *lowest* status of its sub-items
   (Thoughts < Pending User < Planning < Developing < IT Testing < User Testing < Completed). Void items are ignored.

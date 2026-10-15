@@ -291,6 +291,11 @@
   .rm-none { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0 6px; white-space: nowrap; z-index: 2; background: var(--surface); }
   .rm-none:is(button) { cursor: pointer; font: inherit; font-size: 11px; color: var(--muted); }
   .rm-none:is(button):hover { border-color: var(--primary); color: var(--primary); }
+  .qboard { grid-auto-columns: minmax(300px, 1fr); }
+  .qcol .tcol-body { gap: 12px; }
+  .qgroup { display: flex; flex-direction: column; gap: 6px; }
+  button.qcard { text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+  button.qcard:hover { border-color: var(--primary); }
   .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
 
   /* Board */
@@ -1161,6 +1166,8 @@ function renderRoadmap(cur) {
       if (rows.length || !filtersActive()) lanes.push({ key: i.id, init: i, title: i.name, rows });
     });
   }
+  if (!lanes.length) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : 'No tracks yet.'}</div>`;
+  if (ui.rmZoom === 'quarters') return renderQuarterBoard(cur, lanes);
   // Time range: every date in view plus today, padded to whole months, at least 6 months.
   const today = isoDays(stamp());
   const dates = [today];
@@ -1262,10 +1269,9 @@ function renderRoadmap(cur) {
     ? `<div class="banner">Roadmap bars need a start date. Until it is added, items with a deadline show as milestones. To turn on start dates, run this once in the Supabase SQL Editor:
         <code style="display:block;margin-top:6px;white-space:pre-wrap;font-family:var(--mono);font-size:12px">alter table public.work_items add column if not exists start_date date;</code></div>` : '';
   const hint = !anyDates && lanes.length ? `<div class="banner info">Nothing has dates yet. ${canEdit() ? 'Click “Not scheduled · add dates” on any row (or Edit a card) and set a start date and deadline to place it on the roadmap.' : 'Editors can add start dates and deadlines to place items on the roadmap.'}</div>` : '';
-  if (!lanes.length) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : 'No tracks yet.'}</div>`;
   return `${setupNote}${hint}
     <div class="rm-tools">
-      <div class="seg" aria-label="Timeline scale"><button class="${ui.rmZoom !== 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="months">Months</button><button class="${ui.rmZoom === 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="quarters">Quarters</button></div>
+      ${rmViewSeg()}
       <button class="btn sm" data-act="rm-today">Jump to today</button>
       <label class="chk" style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)"><input type="checkbox" data-act="rm-unscheduled" ${ui.rmUnscheduled ? 'checked' : ''}> Show items without dates</label>
       <div class="rm-legend" aria-label="Legend">
@@ -1286,6 +1292,79 @@ function renderRoadmap(cur) {
       </div>
     </div>`;
 }
+const rmViewSeg = () => `<div class="seg" aria-label="Roadmap view"><button class="${ui.rmZoom !== 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="months" title="Bars on a month-by-month timeline">Timeline</button><button class="${ui.rmZoom === 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="quarters" title="What is due this quarter and next">Next 2 quarters</button></div>`;
+
+/* "Next 2 quarters": a plain board of what is due this quarter and next, plus an
+   Overdue column when anything is late. Each item goes in the quarter of its
+   deadline (or of its start date if it has no deadline), grouped by track. */
+function renderQuarterBoard(cur, lanes) {
+  const t = new Date(), y = t.getFullYear(), q = Math.floor(t.getMonth() / 3);
+  const qStart = (yy, qq) => { yy += Math.floor(qq / 4); qq = ((qq % 4) + 4) % 4; return { y: yy, q: qq, from: `${yy}-${String(qq * 3 + 1).padStart(2, '0')}-01` }; };
+  const Q0 = qStart(y, q), Q1 = qStart(y, q + 1), Q2 = qStart(y, q + 2);
+  const todayIso = stamp();
+  const qLabel = Q => `Q${Q.q + 1} ${Q.y}`;
+  const qRange = (Q, N) => { const [a, b] = [Q.from, N.from].map(v => v.split('-').map(Number)); const end = new Date(b[0], b[1] - 1, 0); return `${MONTHS[a[1] - 1]} – ${MONTHS[end.getMonth()]} ${end.getFullYear()}`; };
+  const cols = { overdue: [], now: [], next: [] };
+  let later = 0, undated = 0, done = 0;
+  lanes.forEach(l => {
+    const rows = l.rows.length ? l.rows : (l.item ? [l.item] : []);
+    rows.forEach(r => {
+      const s = effStatus(r), sp = spanOf(r);
+      const key = sp.end || sp.start;
+      if (isClosed(s)) { if (key && key >= Q0.from && key < Q2.from) done++; return; }
+      if (!key) { undated++; return; }
+      const entry = { item: r, lane: l, sp, key };
+      if (sp.end && sp.end < todayIso) cols.overdue.push(entry);
+      else if (key < Q1.from) cols.now.push(entry);
+      else if (key < Q2.from) cols.next.push(entry);
+      else later++;
+    });
+  });
+  const card = e => {
+    const r = e.item, s = effStatus(r), sp = e.sp, meta = STATUS_META[s];
+    const d = sp.end ? daysUntil(sp.end) : null;
+    const due = sp.end
+      ? `<span class="due ${d < 0 ? 'over' : d <= 7 ? 'soon' : 'later'}">${d < 0 ? `Overdue ${-d}d` : d === 0 ? 'Due today' : `Due ${fmtShort(sp.end)} · ${d}d`}</span>`
+      : `<span class="due later">Starts ${fmtShort(sp.start)}</span>`;
+    const started = sp.start && sp.end && sp.start <= todayIso ? `<span class="tag derived">Started ${fmtShort(sp.start)}</span>` : '';
+    const tag = canEdit() ? 'button' : 'div';
+    return `<${tag} class="icard qcard" ${canEdit() ? `type="button" data-act="edit-item" data-id="${r.id}"` : ''} style="--sc:${meta.color}" title="${esc(pathText(r))}">
+      <div class="ihead"><div class="name"><span class="code">${!cur && !r.parentId ? 'Track ' : ''}${codeOf(r)}</span>${esc(r.name)}</div></div>
+      <div class="ctrls">${statusPill(s)}${due}${started}</div>
+      ${r.owner ? `<div class="meta-line">👤 ${esc(r.owner)}</div>` : ''}
+    </${tag}>`;
+  };
+  const colHTML = (title, sub, list, color, emptyText) => {
+    list.sort((a, b) => a.key.localeCompare(b.key));
+    // group by lane (track, or initiative on the overview) in lane order
+    const groups = lanes.map(l => ({ l, items: list.filter(e => e.lane === l) })).filter(g => g.items.length);
+    return `<section class="tcol qcol" aria-label="${esc(title)}">
+      <div class="tcol-head" style="--tc:${color}">
+        <div class="ihead"><div class="t name">${esc(title)}</div><span class="pct" style="font-weight:700">${list.length}</span></div>
+        <div class="meta-line">${esc(sub)}</div>
+      </div>
+      <div class="tcol-body" data-scroll-key="q-${title}">${groups.length ? groups.map(g => `<div class="qgroup"><div class="group-label">${esc(g.l.title)}</div>${g.items.map(card).join('')}</div>`).join('') : `<div class="tcol-empty">${emptyText}</div>`}</div>
+    </section>`;
+  };
+  const total = cols.overdue.length + cols.now.length + cols.next.length;
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${total} open item${total === 1 ? '' : 's'} due by the end of ${qLabel(Q1)}`; });
+  const notes = [
+    done ? `${done} completed this period` : '',
+    later ? `${later} due after ${qLabel(Q1)}` : '',
+    undated ? `${undated} without dates` : '',
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="rm-tools">
+      ${rmViewSeg()}
+      <span class="meta-line" style="margin:0">Open items, placed by deadline${notes ? ` · ${notes} (see Timeline)` : ''}</span>
+    </div>
+    <div class="tboard qboard" data-scroll-key="quarters:${ui.view}:${ui.track}">
+      ${cols.overdue.length ? colHTML('Overdue', 'Past their deadline and not completed', cols.overdue, 'var(--danger)', '') : ''}
+      ${colHTML(`This quarter · ${qLabel(Q0)}`, qRange(Q0, Q1), cols.now, 'var(--primary)', 'Nothing due this quarter.')}
+      ${colHTML(`Next quarter · ${qLabel(Q1)}`, qRange(Q1, Q2), cols.next, 'var(--s-ut)', 'Nothing due next quarter yet.')}
+    </div>`;
+}
+
 function scrollRoadmapToToday(el) {
   el = el || document.querySelector('.rm');
   if (el) el.scrollLeft = Math.max(0, Number(el.dataset.todayX) - 60);
