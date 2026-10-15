@@ -38,6 +38,8 @@ create table if not exists public.work_items (
   status        text        not null default 'Thoughts',
   -- Status before the item was ticked Completed, so unticking can restore it.
   prev_status   text,
+  -- Optional; with a deadline it draws the item as a bar on the roadmap.
+  start_date    date,
   deadline      date,
   owner         text        not null default '',
   notes         text        not null default '',
@@ -58,6 +60,12 @@ create table if not exists public.work_items (
 alter table public.work_items drop constraint if exists work_items_initiative_id_fkey;
 alter table public.work_items add constraint work_items_initiative_id_fkey
   foreign key (initiative_id) references public.initiatives (id) on delete restrict;
+
+-- Roadmap start dates (added after the first version of this script).
+alter table public.work_items add column if not exists start_date date;
+alter table public.work_items drop constraint if exists work_items_start_before_deadline;
+alter table public.work_items add constraint work_items_start_before_deadline
+  check (start_date is null or deadline is null or start_date <= deadline);
 
 create index if not exists work_items_initiative_id_idx on public.work_items (initiative_id);
 create index if not exists work_items_parent_id_idx     on public.work_items (parent_id);

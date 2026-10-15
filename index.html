@@ -252,6 +252,45 @@
   .qa-form input { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
   .qa-form .help { font-size: 11.5px; color: var(--muted); }
   .tcol-add { background: transparent; border: 2px dashed var(--border); }
+  /* Roadmap: one lane per track (or initiative), one row per item, bars on a month scale */
+  .rm-tools { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rm-tools .seg button { padding: 6px 12px; font-size: 13px; }
+  .rm-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-2); align-items: center; }
+  .rm-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .rm-key-bar { width: 18px; height: 8px; border-radius: 3px; background: var(--s-it-bg); border: 1px solid var(--s-it); border-left-width: 3px; }
+  .rm-key-ms { width: 9px; height: 9px; transform: rotate(45deg); background: var(--ink-2); }
+  .rm-key-today { width: 2px; height: 12px; background: var(--primary); }
+  .rm { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .rm-grid { position: relative; }
+  .rm-row { display: flex; min-height: 34px; border-bottom: 1px solid var(--border); }
+  .rm-row:last-child { border-bottom: 0; }
+  .rm-label { position: sticky; left: 0; z-index: 3; flex: none; width: var(--rm-label); background: var(--surface); border-right: 1px solid var(--border); padding: 6px 10px; display: flex; align-items: center; gap: 6px; font-size: 13px; min-width: 0; }
+  .rm-label .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rm-time { position: relative; flex: none; }
+  .rm-head { position: sticky; top: 0; z-index: 4; min-height: 46px; background: var(--surface-2); }
+  .rm-head .rm-label { background: var(--surface-2); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+  .rm-q, .rm-m { position: absolute; font-size: 11px; color: var(--muted); white-space: nowrap; padding-left: 6px; border-left: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .rm-q { top: 4px; height: 18px; font-weight: 700; color: var(--ink-2); }
+  .rm-m { top: 24px; height: 20px; }
+  .rm-lane { background: var(--surface-2); min-height: 40px; }
+  .rm-lane .rm-label { background: var(--surface-2); font-weight: 700; }
+  .rm-lane .pct { font-size: 11.5px; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rm-overlay { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; }
+  .rm-gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .rm-gl.q { background: var(--border-strong); }
+  .rm-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary); }
+  .rm-today span { position: absolute; top: 2px; left: 4px; font-size: 10.5px; font-weight: 700; color: var(--primary); background: var(--surface-2); padding: 0 3px; border-radius: 3px; white-space: nowrap; }
+  .rm-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 20px; border-radius: 4px; background: var(--b-bg); border: 1px solid var(--b-c); border-left-width: 4px; color: var(--ink); font-size: 11.5px; line-height: 18px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; cursor: default; font-variant-numeric: tabular-nums; }
+  .rm-bar.thin { height: 8px; border-width: 0; border-radius: 4px; background: var(--b-c); opacity: .55; padding: 0; }
+  .rm-bar.late { box-shadow: 0 0 0 2px var(--danger); }
+  .rm-bar.closed { opacity: .55; }
+  button.rm-bar, button.rm-ms { cursor: pointer; font: inherit; }
+  .rm-ms { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; transform: rotate(45deg); background: var(--b-c); border: 2px solid var(--surface); z-index: 2; padding: 0; }
+  .rm-ms.late { outline: 2px solid var(--danger); }
+  .rm-ms-label { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; z-index: 2; padding-left: 10px; font-variant-numeric: tabular-nums; }
+  .rm-none { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0 6px; white-space: nowrap; z-index: 2; background: var(--surface); }
+  .rm-none:is(button) { cursor: pointer; font: inherit; font-size: 11px; color: var(--muted); }
+  .rm-none:is(button):hover { border-color: var(--primary); color: var(--primary); }
   .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
 
   /* Board */
@@ -293,6 +332,8 @@
     .wrap { padding: 16px 16px 48px; }
     h1 { font-size: 24px; }
     .tboard { grid-auto-columns: minmax(260px, 86vw); }
+    .rm-grid { --rm-label: 140px !important; }
+    .rm-label { font-size: 12px; padding-inline: 6px; }
     .two { grid-template-columns: 1fr; }
     .inits { grid-template-columns: 1fr; }
   }
@@ -350,7 +391,7 @@ const LINK = (() => {
 
 let db = { initiatives: [], items: [] }, ui;
 const store = {
-  sb: null, session: null, isEditor: false, loaded: false, loading: false,
+  sb: null, session: null, isEditor: false, loaded: false, loading: false, hasStartDate: false,
   channel: null, live: 'off', queue: Promise.resolve(),
 };
 // Auth screen state: 'checking' | 'signin' | 'reset-sent' | 'set-password' | 'app'
@@ -359,10 +400,10 @@ const canEdit = () => store.isEditor;
 
 function loadUI() {
   try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
-  ui = Object.assign({ view: 'overview', track: 'all', mode: 'tracks', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [] }, ui);
+  ui = Object.assign({ view: 'overview', track: 'all', mode: 'tracks', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [], rmZoom: 'months', rmUnscheduled: true, rmCollapsed: [] }, ui);
   normalizeMode();
 }
-function normalizeMode() { if (ui.mode === 'board') ui.mode = 'status'; if (ui.mode !== 'status') ui.mode = 'tracks'; }
+function normalizeMode() { if (ui.mode === 'board') ui.mode = 'status'; if (!['status', 'roadmap'].includes(ui.mode)) ui.mode = 'tracks'; }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
 
 // Database rows use snake_case; the page uses camelCase.
@@ -370,14 +411,14 @@ const fromInit = r => ({ id: r.id, name: r.name, description: r.description || '
 const toInit = x => ({ id: x.id, name: x.name, description: x.description || '', sort_order: x.order ?? 0 });
 const fromItem = r => ({
   id: r.id, initiativeId: r.initiative_id, parentId: r.parent_id || null, name: r.name, status: r.status,
-  prevStatus: r.prev_status || undefined, deadline: r.deadline || '', owner: r.owner || '', notes: r.notes || '',
+  prevStatus: r.prev_status || undefined, startDate: r.start_date || '', deadline: r.deadline || '', owner: r.owner || '', notes: r.notes || '',
   links: r.links || [], order: r.sort_order ?? 0, createdAt: r.created_at, updatedAt: r.updated_at,
 });
-const toItem = x => ({
+const toItem = x => Object.assign({
   id: x.id, initiative_id: x.initiativeId, parent_id: x.parentId || null, name: x.name, status: x.status,
   prev_status: x.prevStatus || null, deadline: x.deadline || null, owner: x.owner || '', notes: x.notes || '',
   links: x.links || [], sort_order: x.order ?? 0,
-});
+}, store.hasStartDate ? { start_date: x.startDate || null } : {});
 
 // Turn a Supabase / network error into a sentence a person can act on.
 function explain(err, doing) {
@@ -426,6 +467,9 @@ async function loadData({ quiet = false } = {}) {
     ]);
     if (editor.error) throw editor.error;
     db = { initiatives: inits.map(fromInit), items: items.map(fromItem) };
+    // start_date was added for the roadmap; older databases may not have it yet.
+    if (items.length) store.hasStartDate = 'start_date' in items[0];
+    else { const probe = await store.sb.from('work_items').select('start_date').limit(1); store.hasStartDate = !probe.error; }
     store.isEditor = editor.data === true;
     store.loaded = true;
     if (document.getElementById('errorBar').dataset.kind === 'load') hideError();
@@ -834,6 +878,8 @@ function render() {
     ${renderWork(cur)}`}
   `;
   restoreScroll(app, kept);
+  const rm = app.querySelector('.rm');
+  if (rm && !scrollMemory[rm.dataset.scrollKey]) { rm.scrollLeft = Number(rm.dataset.openX); scrollMemory[rm.dataset.scrollKey] = [rm.scrollLeft, 0]; }
   if (quickAdd.key && hadQaFocus) focusQuickAdd(false);
 }
 
@@ -959,10 +1005,10 @@ function renderWork(cur) {
         <select data-act="filter-status"><option value="all">All statuses</option>${STATUSES.map(s => `<option ${ui.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
         <label class="chk"><input type="checkbox" data-act="hide-done" ${ui.hideDone ? 'checked' : ''}> Hide completed / void</label>
         <label class="chk"><input type="checkbox" data-act="overdue-only" ${ui.overdueOnly ? 'checked' : ''}> Overdue only</label>
-        <div class="seg" role="tablist" aria-label="Board view"><button class="${ui.mode === 'tracks' ? 'on' : ''}" data-act="mode" data-mode="tracks" title="${cur ? 'One column per track' : 'One column per initiative'}">${cur ? 'By track' : 'By initiative'}</button><button class="${ui.mode === 'status' ? 'on' : ''}" data-act="mode" data-mode="status" title="One column per status">By status</button></div>
+        <div class="seg" role="tablist" aria-label="Board view"><button class="${ui.mode === 'tracks' ? 'on' : ''}" data-act="mode" data-mode="tracks" title="${cur ? 'One column per track' : 'One column per initiative'}">${cur ? 'By track' : 'By initiative'}</button><button class="${ui.mode === 'status' ? 'on' : ''}" data-act="mode" data-mode="status" title="One column per status">By status</button><button class="${ui.mode === 'roadmap' ? 'on' : ''}" data-act="mode" data-mode="roadmap" title="Timeline of start dates and deadlines">Roadmap</button></div>
       </div>
       <div class="work-head"><h3>${sel ? esc(sel.label) : (cur ? 'All tracks' : 'All initiatives')}</h3><span class="meta" id="countMeta"></span></div>
-      ${ui.mode === 'status' ? renderBoard(cur) : renderTrackBoard(cur)}
+      ${ui.mode === 'status' ? renderBoard(cur) : ui.mode === 'roadmap' ? renderRoadmap(cur) : renderTrackBoard(cur)}
     </section>
   </div>`;
 }
@@ -1076,6 +1122,173 @@ async function submitQuickAdd(form) {
   render();
   focusQuickAdd(true); // ready for the next one
   toast(`Added ${code} ${name}${filtersActive() && !matches(IDX.byId.get(created.id) || created) ? ' (hidden by the current filters)' : ''}.`);
+}
+
+/* Roadmap. Each item is drawn from its start date to its deadline. A parent spans
+   the earliest start to the latest deadline among itself and its sub-items. With a
+   deadline only it is a milestone (diamond); with no dates it is listed as not
+   scheduled, so nothing disappears from view. */
+const DAY = 86400000;
+const isoDays = iso => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d) / DAY; };
+const daysIso = n => new Date(n * DAY).toISOString().slice(0, 10);
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtShort = iso => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${MONTHS[m - 1]}`; };
+
+function spanOf(item) { return spanOfAll([item, ...descendants(item)]); }
+function spanOfAll(all) {
+  const starts = all.map(x => x.startDate).filter(Boolean).sort();
+  const ends = all.map(x => x.deadline).filter(Boolean).sort();
+  const start = starts[0] || '', end = ends[ends.length - 1] || '';
+  if (start && end) return start <= end ? { kind: 'bar', start, end } : { kind: 'bar', start: end, end: start };
+  if (end) return { kind: 'milestone', end };
+  if (start) return { kind: 'start', start };
+  return { kind: 'none' };
+}
+
+function renderRoadmap(cur) {
+  const memo = new Map();
+  const show = i => visible(i, memo);
+  const lanes = [];
+  if (cur) {
+    rootsInScope(cur).filter(show).forEach(t => lanes.push({ key: t.id, item: t, title: `Track ${codeOf(t)} ${t.name}`, rows: childrenOf(t.id).filter(show) }));
+    if (ui.track === 'all') {
+      const linked = linkedRoots(cur).filter(show);
+      if (linked.length) lanes.push({ key: 'linked:' + cur.id, title: 'Linked from other initiatives', rows: linked, linked: true });
+    }
+  } else {
+    initiatives().filter(i => ui.track === 'all' || i.id === ui.track).forEach(i => {
+      const rows = tracksOf(i.id).filter(show);
+      if (rows.length || !filtersActive()) lanes.push({ key: i.id, init: i, title: i.name, rows });
+    });
+  }
+  // Time range: every date in view plus today, padded to whole months, at least 6 months.
+  const today = isoDays(stamp());
+  const dates = [today];
+  lanes.forEach(l => [l.item, ...l.rows].filter(Boolean).forEach(r => { const sp = spanOf(r); if (sp.start) dates.push(isoDays(sp.start)); if (sp.end) dates.push(isoDays(sp.end)); }));
+  const first = new Date(Math.min(...dates) * DAY), last = new Date(Math.max(...dates) * DAY);
+  let y0 = first.getUTCFullYear(), m0 = first.getUTCMonth() - 1; if (m0 < 0) { m0 += 12; y0--; }
+  let y1 = last.getUTCFullYear(), m1 = last.getUTCMonth() + 2;
+  while ((y1 - y0) * 12 + (m1 - m0) < 6) m1++;
+  const from = Date.UTC(y0, m0, 1) / DAY, to = Date.UTC(y1, m1, 1) / DAY;
+  const pxDay = ui.rmZoom === 'quarters' ? 1.4 : 3.6;
+  const W = Math.round((to - from) * pxDay), LABEL = 280;
+  const x = d => Math.round((d - from) * pxDay);
+  // Header and grid lines
+  let head = '', lines = '';
+  for (let y = y0, m = m0; Date.UTC(y, m, 1) / DAY < to; m++) {
+    if (m > 11) { m = 0; y++; }
+    const d = Date.UTC(y, m, 1) / DAY, nx = Date.UTC(y, m + 1, 1) / DAY;
+    const q = m % 3 === 0;
+    if (q || d === from) head += `<div class="rm-q" style="left:${x(d)}px">Q${Math.floor(m / 3) + 1} ${y}</div>`;
+    head += `<div class="rm-m" style="left:${x(d)}px;width:${x(nx) - x(d)}px">${ui.rmZoom === 'quarters' ? MONTHS[m].slice(0, 1) : MONTHS[m]}</div>`;
+    lines += `<div class="rm-gl ${q ? 'q' : ''}" style="left:${x(d)}px"></div>`;
+  }
+  const todayX = x(today);
+  lines += `<div class="rm-today" style="left:${todayX}px"><span>Today</span></div>`;
+
+  let scheduled = 0, total = 0;
+  const mark = (item, opts = {}) => {
+    const s = effStatus(item), sp = spanOf(item), meta = STATUS_META[s];
+    const late = !isClosed(s) && sp.end && isoDays(sp.end) < today;
+    const tip = `${codeOf(item)} ${item.name}\n${s}${sp.start ? `\nStart ${fmtDate(sp.start)}` : ''}${sp.end ? `\nDeadline ${fmtDate(sp.end)}` : ''}${late ? `\nOverdue by ${today - isoDays(sp.end)} days` : ''}${hasKids(item) ? '\nSpan covers its sub-items' : ''}`;
+    const tag = canEdit() ? 'button' : 'div';
+    const act = canEdit() ? `data-act="edit-item" data-id="${item.id}" type="button"` : '';
+    const vars = `--b-c:${meta.color};--b-bg:${meta.bg}`;
+    if (sp.kind === 'none') {
+      if (!ui.rmUnscheduled && !opts.summary) return '';
+      return opts.summary ? '' : `<${tag} class="rm-none" ${act} style="left:${Math.max(4, todayX + 8)}px" title="${esc(tip)}">Not scheduled${canEdit() ? ' · add dates' : ''}</${tag}>`;
+    }
+    if (!opts.summary) scheduled++;
+    if (sp.kind === 'bar') {
+      const l = x(isoDays(sp.start)), w = Math.max(8, x(isoDays(sp.end) + 1) - l);
+      if (opts.summary) return `<div class="rm-bar thin" style="${vars};left:${l}px;width:${w}px" title="${esc(tip)}"></div>`;
+      const txt = w > 120 ? `${fmtShort(sp.start)} – ${fmtShort(sp.end)}` : '';
+      return `<${tag} class="rm-bar ${late ? 'late' : ''} ${isClosed(s) ? 'closed' : ''}" ${act} style="${vars};left:${l}px;width:${w}px" title="${esc(tip)}" aria-label="${esc(tip.replace(/\n/g, ', '))}">${txt}</${tag}>`;
+    }
+    const at = sp.kind === 'milestone' ? sp.end : sp.start;
+    const px = x(isoDays(at) + (sp.kind === 'milestone' ? 0.5 : 0));
+    if (opts.summary) return `<div class="rm-ms" style="--b-c:${meta.color};left:${px}px;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;opacity:.6" title="${esc(tip)}"></div>`;
+    return `<${tag} class="rm-ms ${late ? 'late' : ''}" ${act} style="--b-c:${meta.color};left:${px}px" title="${esc(tip)}" aria-label="${esc(tip.replace(/\n/g, ', '))}"></${tag}>
+      <div class="rm-ms-label" style="left:${px}px">${sp.kind === 'milestone' ? 'Due' : 'Starts'} ${fmtShort(at)}${late ? ' · overdue' : ''}</div>`;
+  };
+  // Lane header: one thin bar for the whole track / initiative, coloured by its lowest status.
+  const laneBar = (all, low) => {
+    const sp = spanOfAll(all); if (sp.kind === 'none' || !low) return '';
+    const c = STATUS_META[low].color, a = isoDays(sp.start || sp.end), b = isoDays(sp.end || sp.start);
+    return `<div class="rm-bar thin" style="--b-c:${c};left:${x(a)}px;width:${Math.max(8, x(b + 1) - x(a))}px" title="${esc(`${sp.start ? fmtDate(sp.start) : ''}${sp.start && sp.end ? ' – ' : ''}${sp.end ? fmtDate(sp.end) : ''}`)}"></div>`;
+  };
+  // Where the timeline opens: today, or earlier when in-progress work started before it.
+  let firstOpenStart = today;
+  lanes.forEach(l => l.rows.forEach(r => { const sp = spanOf(r); if (sp.start && sp.end && isoDays(sp.end) >= today - 31) firstOpenStart = Math.min(firstOpenStart, isoDays(sp.start)); }));
+  const openX = Math.max(0, Math.min(todayX - 60, x(Math.max(firstOpenStart, today - 120)) - 24));
+  const rowHTML = (item, depthPad) => {
+    total++;
+    const s = effStatus(item);
+    if (spanOf(item).kind === 'none' && !ui.rmUnscheduled) return '';
+    return `<div class="rm-row">
+      <div class="rm-label" style="padding-left:${10 + depthPad}px" title="${esc(codeOf(item) + ' ' + item.name)}">
+        <span class="dot" style="background:${STATUS_META[s].color}" aria-hidden="true"></span>
+        <span class="txt"><span class="code">${!cur && !item.parentId ? 'Track ' : ''}${codeOf(item)}</span>${esc(item.name)}</span>
+      </div>
+      <div class="rm-time" style="width:${W}px">${mark(item)}</div>
+    </div>`;
+  };
+  let body = '';
+  lanes.forEach(l => {
+    const collapsed = ui.rmCollapsed.includes(l.key);
+    const laneItems = l.item ? [l.item] : l.rows;
+    const st = stats(laneItems.flatMap(leavesUnder));
+    const low = l.item ? effStatus(l.item) : lowestStatus(l.rows);
+    const titleHTML = l.init
+      ? `<a href="#" data-act="view" data-view="${l.init.id}" style="color:inherit">${esc(l.title)}</a>`
+      : esc(l.title);
+    body += `<div class="rm-row rm-lane">
+      <div class="rm-label">
+        <button class="toggle" data-act="rm-lane" data-key="${l.key}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${esc(l.title)}">${collapsed ? '▶' : '▼'}</button>
+        ${low ? `<span class="dot" style="background:${STATUS_META[low].color}" title="${esc(low)}"></span>` : ''}
+        <span class="txt" title="${esc(l.title)}">${titleHTML}</span>
+        ${l.linked ? '' : `<span class="pct">${st.pct}%</span>`}
+      </div>
+      <div class="rm-time" style="width:${W}px">${laneBar(l.item ? [l.item, ...descendants(l.item)] : l.rows.flatMap(r => [r, ...descendants(r)]), low)}</div>
+    </div>`;
+    if (!collapsed) {
+      if (l.item && !l.rows.length && spanOf(l.item).kind !== 'none') body += rowHTML(l.item, 18);
+      body += l.rows.map(r => rowHTML(r, 18)).join('');
+    }
+  });
+  const anyDates = scheduled > 0;
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${scheduled} of ${total} item${total === 1 ? '' : 's'} on the timeline`; });
+  const setupNote = !store.hasStartDate
+    ? `<div class="banner">Roadmap bars need a start date. Until it is added, items with a deadline show as milestones. To turn on start dates, run this once in the Supabase SQL Editor:
+        <code style="display:block;margin-top:6px;white-space:pre-wrap;font-family:var(--mono);font-size:12px">alter table public.work_items add column if not exists start_date date;</code></div>` : '';
+  const hint = !anyDates && lanes.length ? `<div class="banner info">Nothing has dates yet. ${canEdit() ? 'Click “Not scheduled · add dates” on any row (or Edit a card) and set a start date and deadline to place it on the roadmap.' : 'Editors can add start dates and deadlines to place items on the roadmap.'}</div>` : '';
+  if (!lanes.length) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : 'No tracks yet.'}</div>`;
+  return `${setupNote}${hint}
+    <div class="rm-tools">
+      <div class="seg" aria-label="Timeline scale"><button class="${ui.rmZoom !== 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="months">Months</button><button class="${ui.rmZoom === 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="quarters">Quarters</button></div>
+      <button class="btn sm" data-act="rm-today">Jump to today</button>
+      <label class="chk" style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)"><input type="checkbox" data-act="rm-unscheduled" ${ui.rmUnscheduled ? 'checked' : ''}> Show items without dates</label>
+      <div class="rm-legend" aria-label="Legend">
+        <span><span class="rm-key-bar"></span>Start → deadline</span>
+        <span><span class="rm-key-ms"></span>Deadline only</span>
+        <span><span class="rm-key-today"></span>Today</span>
+        <span><span class="rm-key-bar" style="box-shadow:0 0 0 2px var(--danger)"></span>Overdue</span>
+        ${STATUSES.filter(st => st !== 'Void').map(st => `<span><span class="dot" style="background:${STATUS_META[st].color}"></span>${st}</span>`).join('')}
+      </div>
+    </div>
+    <div class="rm" data-scroll-key="roadmap:${ui.view}:${ui.track}:${ui.rmZoom}" data-today-x="${todayX}" data-open-x="${openX}">
+      <div class="rm-grid" style="--rm-label:${LABEL}px;width:calc(var(--rm-label) + ${W}px)">
+        <div class="rm-row rm-head"><div class="rm-label">${cur ? 'Track / item' : 'Initiative / track'}</div><div class="rm-time" style="width:${W}px">${head}</div></div>
+        <div style="position:relative">
+          <div class="rm-overlay" style="left:var(--rm-label);width:${W}px">${lines}</div>
+          ${body}
+        </div>
+      </div>
+    </div>`;
+}
+function scrollRoadmapToToday(el) {
+  el = el || document.querySelector('.rm');
+  if (el) el.scrollLeft = Math.max(0, Number(el.dataset.todayX) - 60);
 }
 
 function progressLine(item) {
@@ -1273,6 +1486,11 @@ function itemModal({ id, initiativeId, parentId }) {
         </div>
         <div class="field"><label>Deadline</label><input type="date" name="deadline" value="${esc(item?.deadline || '')}"><div class="help" data-due></div></div>
       </div>
+      ${store.hasStartDate ? `<div class="two">
+        <div class="field"><label for="startDate">Start date</label><input type="date" id="startDate" name="startDate" value="${esc(item?.startDate || '')}">
+          <div class="help">With a deadline, places this item as a bar on the roadmap.</div></div>
+        <div class="field"></div>
+      </div>` : ''}
       <div class="field"><label>Owner</label><input type="text" name="owner" value="${esc(item?.owner || '')}" placeholder="Optional"></div>
       <div class="field"><label>Notes</label><textarea name="notes" placeholder="Optional">${esc(item?.notes || '')}</textarea></div>
       ${others.length ? `<div class="field"><label>Also linked to initiative</label><div class="checks">${others.map(o => `<label><input type="checkbox" name="links" value="${o.id}" ${(item?.links || []).includes(o.id) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('')}</div>
@@ -1298,17 +1516,19 @@ function itemModal({ id, initiativeId, parentId }) {
     bd.querySelector('[data-save]').onclick = () => {
       const name = q('name').value.trim();
       if (!name) { q('name').focus(); toast('Please enter a name.'); return; }
+      const startDate = q('startDate') ? q('startDate').value : (item?.startDate || '');
+      if (startDate && q('deadline').value && startDate > q('deadline').value) { q('startDate').focus(); toast('The start date must be on or before the deadline.'); return; }
       const links = [...bd.querySelectorAll('[name=links]:checked')].map(x => x.value);
       const newParent = q('parentId').value || null;
       if (item) {
         if (item.parentId !== newParent) { item.parentId = newParent; item.order = nextOrder(initId, newParent); }
-        Object.assign(item, { name, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links });
+        Object.assign(item, { name, startDate, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links });
         if (!kids) { const ns = q('status').value; if (ns === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status; item.status = ns; }
         touch(item);
         commit({ items: [item] });
       } else {
         const now = new Date().toISOString();
-        const created = { id: uid(), initiativeId: initId, parentId: newParent, name, status: q('status').value, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links, order: nextOrder(initId, newParent), createdAt: now, updatedAt: now };
+        const created = { id: uid(), initiativeId: initId, parentId: newParent, name, status: q('status').value, startDate, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links, order: nextOrder(initId, newParent), createdAt: now, updatedAt: now };
         db.items.push(created); commit({ items: [created] });
         if (newParent) ui.collapsed = ui.collapsed.filter(c => c !== newParent);
       }
@@ -1390,6 +1610,7 @@ function rowsForExport() {
       'Has sub-items': hasKids(item) ? 'Yes' : 'No',
       'Status': effStatus(item),
       'Status source': hasKids(item) ? 'Rolled up (lowest of sub-items)' : 'Set directly',
+      'Start date': item.startDate ? fmtDate(item.startDate) : '',
       'Deadline': dl.date ? fmtDate(dl.date) + (dl.inherited ? ' (earliest sub-item)' : '') : '',
       'Days to deadline': d && !isClosed(effStatus(item)) ? d.n : '',
       'Deadline status': d ? d.text : '',
@@ -1487,6 +1708,9 @@ app.addEventListener('click', e => {
   else if (a === 'edit-item') itemModal({ id: el.dataset.id });
   else if (a === 'unlink') unlinkItem(el.dataset.id, el.dataset.init);
   else if (a === 'qa-open') openQuickAdd(el.dataset.key);
+  else if (a === 'rm-zoom') { ui.rmZoom = el.dataset.zoom; saveUI(); render(); }
+  else if (a === 'rm-today') scrollRoadmapToToday();
+  else if (a === 'rm-lane') { const k = el.dataset.key; ui.rmCollapsed = ui.rmCollapsed.includes(k) ? ui.rmCollapsed.filter(x => x !== k) : [...ui.rmCollapsed, k]; saveUI(); render(); }
   else if (a === 'qa-close') closeQuickAdd();
   else if (a === 'open-track') { e.preventDefault(); ui.view = el.dataset.init; ui.track = el.dataset.id; ui.mode = 'tracks'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'add-init') initModal();
@@ -1509,6 +1733,7 @@ app.addEventListener('change', e => {
   else if (a === 'filter-status') { ui.status = el.value; saveUI(); render(); }
   else if (a === 'hide-done') { ui.hideDone = el.checked; saveUI(); render(); }
   else if (a === 'overdue-only') { ui.overdueOnly = el.checked; saveUI(); render(); }
+  else if (a === 'rm-unscheduled') { ui.rmUnscheduled = el.checked; saveUI(); render(); }
 });
 let searchTimer;
 app.addEventListener('input', e => {
