@@ -1780,10 +1780,19 @@ function okrChart(okr, st, W) {
   let d0 = Math.min(...days), d1 = Math.max(...days); if (d1 - d0 < 14) { d1 = d0 + 14; }
   const vals = pts.map(p => p.v).concat(okr.target ?? []);
   let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo || Math.abs(hi) || 1) * 0.15; lo -= pad; hi += pad;
-  const ticks = niceTicks(lo, hi); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  if (Math.min(...vals) >= 0 && lo < 0) lo = 0; // no negative axis for values that are never negative (e.g. %)
+  const ticks = niceTicks(lo, hi).filter(t => t >= lo - 1e-9); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
   const X = d => L + ((d - d0) / (d1 - d0)) * (W - L - R), Y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
   // x labels: about 5 dates
-  const xl = []; for (let i = 0; i <= 4; i++) { const d = Math.round(d0 + (d1 - d0) * i / 4); xl.push(d); }
+  // x axis: label the dates that were actually keyed (baseline, each result, target date),
+  // never evenly spaced in-between dates. Where labels would overlap, the baseline, the
+  // latest result and the target date win; the rest keep a tick and their hover tooltip.
+  const keyed = [...new Set([isoDays(pts[0].d), ...st.results.map(r => isoDays(r.measuredOn)), ...(okr.targetDate ? [isoDays(okr.targetDate)] : [])])].sort((a, b) => a - b);
+  const priority = d => d === isoDays(pts[0].d) ? 0 : (okr.targetDate && d === isoDays(okr.targetDate)) ? 1 : (st.last && d === isoDays(st.last.measuredOn)) ? 2 : 3;
+  const xl = [];
+  [...keyed].sort((a, b) => priority(a) - priority(b) || b - a).forEach(d => { if (xl.every(o => Math.abs(X(o) - X(d)) >= 52)) xl.push(d); });
+  const thisYear = new Date().getFullYear();
+  const dateLabel = d => { const y = new Date(d * DAY).getUTCFullYear(); return fmtShort(daysIso(d)) + (y !== thisYear ? ' ' + String(y).slice(2) : ''); };
   const path = pts.map((p, i) => `${i ? 'L' : 'M'}${X(isoDays(p.d)).toFixed(1)},${Y(p.v).toFixed(1)}`).join('');
   const area = path + `L${X(isoDays(pts[pts.length - 1].d)).toFixed(1)},${(H - B)}L${X(isoDays(pts[0].d)).toFixed(1)},${H - B}Z`;
   const yb = Y(okr.baseline), yt = okr.target !== null ? Y(okr.target) : null;
@@ -1793,7 +1802,9 @@ function okrChart(okr, st, W) {
   return `<svg class="okr-chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(`${okr.keyResult}: baseline ${withUnit(okr.baseline, okr.unit)}${okr.target !== null ? `, target ${withUnit(okr.target, okr.unit)}` : ''}, ${st.results.length} result(s)${st.last ? `, latest ${withUnit(st.current, okr.unit)}` : ''}`)}">
     ${ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
       <text x="${L - 8}" y="${(Y(t) + 4).toFixed(1)}" text-anchor="end" class="ax">${esc(withUnit(t, okr.unit))}</text>`).join('')}
-    ${xl.map(d => `<text x="${X(d).toFixed(1)}" y="${H - B + 20}" text-anchor="middle" class="ax">${fmtShort(daysIso(d))}${new Date(d * DAY).getUTCFullYear() !== new Date().getFullYear() ? ' ' + String(new Date(d * DAY).getUTCFullYear()).slice(2) : ''}</text>`).join('')}
+    ${keyed.map(d => `<line x1="${X(d).toFixed(1)}" x2="${X(d).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 4"/>
+      <line x1="${X(d).toFixed(1)}" x2="${X(d).toFixed(1)}" y1="${H - B}" y2="${H - B + 5}" stroke="var(--border-strong)" stroke-width="1"/>`).join('')}
+    ${xl.map(d => `<text x="${X(d).toFixed(1)}" y="${H - B + 20}" text-anchor="middle" class="ax" data-axis-date="${daysIso(d)}">${dateLabel(d)}</text>`).join('')}
     ${today >= d0 && today <= d1 ? `<line x1="${X(today).toFixed(1)}" x2="${X(today).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--primary)" stroke-width="1" opacity=".35"/><text x="${X(today).toFixed(1)}" y="${T - 5}" text-anchor="middle" class="ax">Today</text>` : ''}
     ${planned}
     <line x1="${L}" x2="${W - R}" y1="${yb.toFixed(1)}" y2="${yb.toFixed(1)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
