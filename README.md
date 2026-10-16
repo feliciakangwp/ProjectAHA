@@ -15,6 +15,11 @@ Data is stored in Supabase; people sign in with email and password.
     A today line, overdue outlines, and undated items listed so nothing is hidden.
     **Next 2 quarters** switches to a simple board: Overdue, This quarter and Next quarter, with open items
     placed by deadline and grouped by track.
+- **Scorecard** (Work | Scorecard switch on every tab): each initiative's **North Star** and its **OKRs**.
+  An OKR has an objective, a key result, a unit, whether higher or lower is better, a **baseline**, and an
+  optional target and target date. Record results as they come in; cards show the latest value, ▲/▼ versus
+  the baseline (improved or fell), progress to target and a health label (On track / At risk / Off track /
+  Achieved). Click an OKR for a chart of results against the baseline and target.
 - **Unlimited nesting**: Track 1 → 1a → 1a.1 → 1a.1.1 … Codes renumber automatically.
 - **Roll-up status**: a track or parent item shows the *lowest* status of its sub-items
   (Thoughts < Pending User < Planning < Developing < IT Testing < User Testing < Completed). Void items are ignored.
@@ -25,8 +30,10 @@ Data is stored in Supabase; people sign in with email and password.
 
 ## Supabase setup
 1. In the Supabase SQL Editor, run `supabase/setup.sql`. It creates the `initiatives`,
-   `work_items` and `editors` tables, turns on Row Level Security, enables realtime and
-   loads the current data. It is safe to run again.
+   `work_items`, `editors`, `okrs` and `okr_results` tables, turns on Row Level Security, enables
+   realtime and loads the starting data. It is safe to run again: the starting data is only loaded
+   into an empty tracker, so deleted items never come back.
+   Already set up before the Scorecard existed? Run just `supabase/scorecard.sql` instead.
 2. **Authentication → URL Configuration**: set **Site URL** to where the dashboard is hosted
    (for GitHub Pages: `https://feliciakangwp.github.io/ProjectAHA/`) and add the same address
    under **Redirect URLs**. Invitation and password-reset links return there.
