@@ -27,6 +27,7 @@ Data is stored in Supabase; people sign in with email and password.
 - **Links** between an item and other initiatives.
 - **Export Excel**, **Backup** (JSON) and, for editors, **Restore**.
 - **Live updates**: changes made in one browser appear in every other open browser.
+- **Light / dark mode**: follows the device until you pick one with the ☾ Dark / ☀ Light button; the choice is remembered in that browser.
 
 ## Supabase setup
 1. In the Supabase SQL Editor, run `supabase/setup.sql`. It creates the `initiatives`,
