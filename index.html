@@ -346,6 +346,11 @@
   .res-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .res-table .good { color: var(--s-done-ink); } .res-table .bad { color: var(--danger); }
   .res-table tr.base td { color: var(--muted); font-style: italic; }
+  .res-table .row-acts { white-space: nowrap; text-align: right; }
+  .res-table .row-acts .btn + .btn { margin-left: 4px; }
+  .res-table tr.editing td { background: var(--primary-soft); }
+  .res-table tr.editing input { width: 100%; min-width: 90px; border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 7px; background: var(--surface); font: inherit; }
+  .res-table tr.editing input[type=number] { text-align: right; }
   .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
 
   /* Board */
@@ -1784,22 +1789,35 @@ function okrChart(okr, st, W) {
   </svg>`;
 }
 
-let okrDetailOpen = null, okrDetailTimer;
+let okrDetailOpen = null, okrDetailTimer, editingResult = null; // editingResult: id of the result row being edited
 function scheduleOkrDetail() { clearTimeout(okrDetailTimer); okrDetailTimer = setTimeout(() => { if (okrDetailOpen && document.getElementById('modal')) okrDetail(okrDetailOpen, { keepForm: true }); }, 80); }
 
 function okrDetail(id, opts = {}) {
   const okr = db.okrs.find(o => o.id === id);
   if (!okr) { if (okrDetailOpen === id) { closeModal(); toast('That OKR was deleted.'); } return; }
   const typed = opts.keepForm ? { v: document.getElementById('resValue')?.value, d: document.getElementById('resDate')?.value, n: document.getElementById('resNote')?.value } : null;
+  // Keep an in-progress row edit across re-renders (e.g. a live update from another browser).
+  const typedEdit = opts.keepForm && editingResult && document.getElementById('editResValue')
+    ? { v: document.getElementById('editResValue').value, d: document.getElementById('editResDate').value, n: document.getElementById('editResNote').value } : null;
+  if (okrDetailOpen !== id || (editingResult && !db.results.some(r => r.id === editingResult))) editingResult = null;
   okrDetailOpen = id;
   const st = okrStats(okr), init = IDX.initById.get(okr.initiativeId);
   const W = Math.max(320, Math.min(820, window.innerWidth - 80));
   const rows = [...st.results].reverse().map((r, i, arr) => {
+    if (canEdit() && r.id === editingResult) {
+      const t = typedEdit || { v: String(r.value), d: r.measuredOn, n: r.note };
+      return `<tr class="editing" data-edit-row="${r.id}">
+        <td><input id="editResDate" type="date" value="${esc(t.d)}" aria-label="Measured on" required></td>
+        <td class="num"><input id="editResValue" type="number" step="any" inputmode="decimal" value="${esc(t.v)}" aria-label="Result${okr.unit ? ` (${esc(okr.unit)})` : ''}" required></td>
+        <td class="num" style="color:var(--muted)">${okr.unit ? esc(okr.unit) : ''}</td>
+        <td><input id="editResNote" type="text" value="${esc(t.n)}" placeholder="Note (optional)" aria-label="Note"></td>
+        <td class="row-acts"><button class="btn sm primary" data-res-save="${r.id}">Save</button><button class="btn sm" data-res-cancel>Cancel</button></td></tr>`;
+    }
     const prev = arr[i + 1] ? arr[i + 1].value : okr.baseline;
     const d = r.value - prev, better = Math.sign(d * (okr.direction === 'decrease' ? -1 : 1));
     return `<tr><td>${fmtDate(r.measuredOn)}</td><td class="num"><b>${withUnit(r.value, okr.unit)}</b></td>
       <td class="num ${better > 0 ? 'good' : better < 0 ? 'bad' : ''}">${d === 0 ? '–' : (d > 0 ? '▲ ' : '▼ ') + withUnit(Math.abs(d), okr.unit)}</td>
-      <td>${esc(r.note)}</td>${canEdit() ? `<td><button class="btn sm ghost" data-res-del="${r.id}" aria-label="Delete result from ${fmtDate(r.measuredOn)}">Delete</button></td>` : ''}</tr>`;
+      <td>${esc(r.note)}</td>${canEdit() ? `<td class="row-acts"><button class="btn sm ghost" data-res-edit="${r.id}" aria-label="Edit result from ${fmtDate(r.measuredOn)}">Edit</button><button class="btn sm ghost" data-res-del="${r.id}" aria-label="Delete result from ${fmtDate(r.measuredOn)}">Delete</button></td>` : ''}</tr>`;
   }).join('');
   openModal(`
     <header><h3>${esc(okr.keyResult)}</h3><button class="btn ghost sm" data-close aria-label="Close">✕</button></header>
@@ -1844,6 +1862,27 @@ function okrDetail(id, opts = {}) {
       const s2 = okrStats(okr);
       toast(`Recorded ${withUnit(r.value, okr.unit)} · ${HEALTH[s2.health].label}`);
       document.getElementById('resValue')?.focus();
+    });
+    // Edit a result in place: value, date and note.
+    bd.querySelectorAll('[data-res-edit]').forEach(b => b.onclick = () => { editingResult = b.dataset.resEdit; okrDetail(okr.id); document.getElementById('editResValue')?.focus(); });
+    const cancelEdit = () => { editingResult = null; okrDetail(okr.id); };
+    const saveEdit = () => {
+      const r = db.results.find(x => x.id === editingResult); if (!r) { cancelEdit(); return; }
+      const v = bd.querySelector('#editResValue').value, d = bd.querySelector('#editResDate').value;
+      if (v === '' || Number.isNaN(Number(v))) { toast('Enter the result as a number.'); bd.querySelector('#editResValue').focus(); return; }
+      if (!d) { toast('Choose the date it was measured.'); bd.querySelector('#editResDate').focus(); return; }
+      const note = bd.querySelector('#editResNote').value.trim();
+      if (Number(v) === r.value && d === r.measuredOn && note === r.note) { cancelEdit(); return; }
+      Object.assign(r, { value: Number(v), measuredOn: d, note });
+      editingResult = null;
+      commit({ results: [r] }); render(); okrDetail(okr.id);
+      toast(`Result updated to ${withUnit(r.value, okr.unit)} on ${fmtDate(r.measuredOn)}.`);
+    };
+    bd.querySelector('[data-res-save]')?.addEventListener('click', saveEdit);
+    bd.querySelector('[data-res-cancel]')?.addEventListener('click', cancelEdit);
+    bd.querySelector('[data-edit-row]')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelEdit(); }
     });
     bd.querySelectorAll('[data-res-del]').forEach(b => b.onclick = () => {
       const r = db.results.find(x => x.id === b.dataset.resDel); if (!r) return;
@@ -2291,7 +2330,7 @@ app.addEventListener('dragleave', e => { const col = e.target.closest('[data-dro
 app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id && canEdit() && IDX.byId.has(id) && !hasKids(IDX.byId.get(id))) setStatus(id, col.dataset.drop); });
 
 document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (document.getElementById('modal')) closeModal(); else closeQuickAdd(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented) { if (document.getElementById('modal')) { okrDetailOpen = null; editingResult = null; closeModal(); } else closeQuickAdd(); } });
 
 initAuth();
 </script>
