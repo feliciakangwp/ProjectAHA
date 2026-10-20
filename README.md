@@ -20,6 +20,12 @@ Data is stored in Supabase; people sign in with email and password.
   optional target and target date. Record results as they come in; cards show the latest value, ▲/▼ versus
   the baseline (improved or fell), progress to target and a health label (On track / At risk / Off track /
   Achieved). Click an OKR for a chart of results against the baseline and target.
+- **Smart City** (`city.html`, the 🏙 Smart City button): Project AHA as a 3D new town built with Three.js.
+  Each initiative is a named plot around the town plaza; each track is a building sized by its number of
+  work items (1 swing, 2 garden, 3–4 pavilion, 5–7 house, 8+ tower) that is built up piece by piece as
+  its items complete (solid = built, blue blueprint = still to build, crane = under way, flag = complete).
+  Old villages lie outside the town wall, cars circle the ring road and shooting stars cross the sky.
+  Hover a building for its progress, click a plot to fly there and list its tracks. Live, read-only.
 - **Unlimited nesting**: Track 1 → 1a → 1a.1 → 1a.1.1 … Codes renumber automatically.
 - **Roll-up status**: a track or parent item shows the *lowest* status of its sub-items
   (Thoughts < Pending User < Planning < Developing < IT Testing < User Testing < Completed). Void items are ignored.
