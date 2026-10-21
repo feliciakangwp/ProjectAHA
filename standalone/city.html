@@ -137,10 +137,19 @@
     <b>House</b><span>5–7 work items</span>
     <b>Tower</b><span>8 or more</span>
   </div>
+  <h3>Track status → what happens on site</h3>
+  <div class="tiers">
+    <b>Thoughts</b><span>“Future development space” sign</span>
+    <b>Pending / Planning</b><span>Workers planning round a table and whiteboard</span>
+    <b>Developing</b><span>Construction: scaffolding, crane, builders</span>
+    <b>IT Testing</b><span>Inspector in a safety helmet checking the build</span>
+    <b>User Testing</b><span>A family viewing the place</span>
+    <b>Completed</b><span>Lived in: residents, lights and decorations</span>
+  </div>
   <div class="keys">
-    <span><span class="k-solid"></span>Built (completed work)</span>
+    <span><span class="k-solid"></span>Built</span>
     <span><span class="k-blue"></span>Blueprint (still to build)</span>
-    <span>🏗 Crane = under way</span><span>🚩 Flag = complete</span><span>Pad colour = track status</span>
+    <span>Developing items count half; IT Testing onwards the structure stands</span>
   </div>
 </div>
 
@@ -204,7 +213,8 @@ function buildModel() {
     const tracks = childrenOf('root:' + init.id).map((t, i) => {
       const ls = leaves(t), live = ls.filter(l => eff(l) !== 'Void'), done = live.filter(l => eff(l) === 'Completed').length;
       pDone += done; pLive += live.length;
-      return { id: t.id, code: String(i + 1), name: t.name, status: eff(t), live: live.length, done, pct: live.length ? done / live.length : 0,
+      const built = live.length ? live.reduce((a, l) => a + (STAGE_BUILT[eff(l)] ?? 0), 0) / live.length : 0;
+      return { id: t.id, code: String(i + 1), name: t.name, status: eff(t), live: live.length, done, pct: live.length ? done / live.length : 0, built,
         tier: live.length ? tierFor(live.length) : null, items: ls.length };
     });
     allDone += pDone; allLive += pLive;
@@ -417,6 +427,197 @@ function stakes(size) {
 }
 function cones(n, r) { const g = new THREE.Group(); const geo = new THREE.ConeGeometry(0.35, 0.9, 10); for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; deco(g, geo, mats.cone, Math.cos(a) * r, 0.45, Math.sin(a) * r); } return g; }
 
+/* --- people and props for the status scenes --- */
+// How much of the structure stands, by item status: planning stages have nothing built,
+// Developing is half up, and from IT Testing on the building stands (being inspected,
+// viewed, then lived in).
+const STAGE_BUILT = { 'Thoughts': 0, 'Pending User': 0, 'Planning': 0, 'Developing': 0.5, 'IT Testing': 1, 'User Testing': 1, 'Completed': 1 };
+const SCENE_NAME = {
+  'Thoughts': 'Future development space', 'Pending User': 'Planning meeting · waiting for users', 'Planning': 'Planning meeting',
+  'Developing': 'Construction under way', 'IT Testing': 'Quality inspection', 'User Testing': 'Owners viewing', 'Completed': 'Lived in', 'Void': 'Empty lot',
+};
+const textTexCache = new Map();
+function textTexture(lines, { bg = '#ffffff', fg = '#1f2937', accent = '#1f5fd6', w = 512, h = 256, drawing = false } = {}) {
+  const key = JSON.stringify([lines, bg, fg, accent, w, h, drawing]);
+  if (textTexCache.has(key)) return textTexCache.get(key);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+  x.fillStyle = bg; x.fillRect(0, 0, w, h);
+  x.strokeStyle = accent; x.lineWidth = 10; x.strokeRect(8, 8, w - 16, h - 16);
+  if (drawing) { // a little floor plan sketched on the whiteboard
+    x.strokeStyle = '#2563eb'; x.lineWidth = 5; x.strokeRect(w * 0.56, h * 0.2, w * 0.36, h * 0.6);
+    x.beginPath(); x.moveTo(w * 0.56, h * 0.5); x.lineTo(w * 0.74, h * 0.5); x.lineTo(w * 0.74, h * 0.2); x.moveTo(w * 0.74, h * 0.62); x.lineTo(w * 0.92, h * 0.62); x.stroke();
+    x.strokeStyle = '#ef4444'; x.beginPath(); x.arc(w * 0.83, h * 0.38, 18, 0, Math.PI * 2); x.stroke();
+  }
+  x.fillStyle = fg; x.textAlign = drawing ? 'left' : 'center'; x.textBaseline = 'middle';
+  const lx = drawing ? 34 : w / 2;
+  const maxW = drawing ? w * 0.5 : w - 60;
+  lines.forEach((ln, i) => {
+    let size = i === 0 ? (drawing ? 40 : 54) : 30; // shrink to fit the board
+    do x.font = `${i === 0 ? 700 : 500} ${size}px "IBM Plex Sans", Arial, sans-serif`; while (x.measureText(ln).width > maxW && --size > 12);
+    x.fillText(ln, lx, h / 2 + (i - (lines.length - 1) / 2) * (i === 0 ? 62 : 52));
+  });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  textTexCache.set(key, t); return t;
+}
+const signMats = new Map();
+const texMat = (lines, opts) => { const k = JSON.stringify([lines, opts]); if (!signMats.has(k)) signMats.set(k, new THREE.MeshStandardMaterial({ map: textTexture(lines, opts), roughness: 0.6 })); return signMats.get(k); };
+function signboard(lines, opts = {}, wdt = 4.2, hgt = 2.1) {
+  const g = new THREE.Group();
+  deco(g, cyl(0.12, 0.12, 2.6 + hgt / 2, 6), mats.wood, -wdt / 2 + 0.3, (2.6 + hgt / 2) / 2, -0.2); // posts behind the board
+  deco(g, cyl(0.12, 0.12, 2.6 + hgt / 2, 6), mats.wood, wdt / 2 - 0.3, (2.6 + hgt / 2) / 2, -0.2);
+  const board = new THREE.Mesh(box(wdt, hgt, 0.15), [mats.wood, mats.wood, mats.wood, mats.wood, texMat(lines, opts), mats.wood]);
+  board.position.y = 2.6; board.castShadow = true; g.add(board);
+  return g;
+}
+
+const skinTones = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac'];
+const figGeo = { body: new THREE.CapsuleGeometry(0.32, 0.65, 4, 8), head: new THREE.SphereGeometry(0.27, 12, 10), leg: box(0.18, 0.6, 0.2), arm: box(0.14, 0.62, 0.16),
+  hat: new THREE.SphereGeometry(0.31, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), brim: cyl(0.4, 0.4, 0.05, 14), vest: cyl(0.345, 0.345, 0.5, 10, 1, true) };
+const colorMat = new Map();
+const cm = c => { if (!colorMat.has(c)) colorMat.set(c, M(c)); return colorMat.get(c); };
+// A small person: hat 'hard' (yellow), 'white' (inspector) or none; vest = hi-vis.
+function person({ shirt = '#2f80ed', pants = '#334155', skin, hat = null, hatColor, vest = false, s = 1 } = {}) {
+  const g = new THREE.Group(); g.scale.setScalar(s);
+  skin = skin || skinTones[Math.floor(Math.random() * skinTones.length)];
+  deco(g, figGeo.leg, cm(pants), -0.12, 0.3, 0); deco(g, figGeo.leg, cm(pants), 0.12, 0.3, 0);
+  deco(g, figGeo.body, cm(shirt), 0, 1.0, 0);
+  if (vest) { const v = deco(g, figGeo.vest, M('#c6f432', { side: THREE.DoubleSide, emissive: '#7fa30d', emissiveIntensity: 0.25 }), 0, 1.05, 0); }
+  const armL = new THREE.Group(); armL.position.set(-0.42, 1.32, 0); deco(armL, figGeo.arm, cm(shirt), 0, -0.28, 0); g.add(armL);
+  const armR = new THREE.Group(); armR.position.set(0.42, 1.32, 0); deco(armR, figGeo.arm, cm(shirt), 0, -0.28, 0); g.add(armR);
+  deco(g, figGeo.head, cm(skin), 0, 1.72, 0);
+  if (hat) { const hc = hatColor || (hat === 'white' ? '#f8fafc' : '#facc15'); deco(g, figGeo.hat, cm(hc), 0, 1.78, 0); deco(g, figGeo.brim, cm(hc), 0, 1.79, 0.05); }
+  g.userData.armL = armL; g.userData.armR = armR;
+  return g;
+}
+function dog(color = '#a0703c') {
+  const g = new THREE.Group();
+  deco(g, box(0.9, 0.38, 0.36), cm(color), 0, 0.5, 0);
+  [[-0.32, -0.12], [-0.32, 0.12], [0.32, -0.12], [0.32, 0.12]].forEach(([x, z]) => deco(g, box(0.1, 0.32, 0.1), cm(color), x, 0.16, z));
+  deco(g, box(0.36, 0.32, 0.32), cm(color), 0.55, 0.78, 0);
+  deco(g, box(0.18, 0.12, 0.2), cm('#3b2a1a'), 0.78, 0.72, 0);
+  const tail = new THREE.Group(); tail.position.set(-0.45, 0.62, 0); deco(tail, box(0.08, 0.32, 0.08), cm(color), 0, 0.14, 0); tail.rotation.z = 0.6; g.add(tail);
+  g.userData.tail = tail;
+  return g;
+}
+function table(w = 2.2, d = 1.2) {
+  const g = new THREE.Group();
+  deco(g, box(w, 0.12, d), mats.wood, 0, 0.9, 0);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => deco(g, box(0.1, 0.9, 0.1), mats.darkWood, a * (w / 2 - 0.12), 0.45, b * (d / 2 - 0.12)));
+  return g;
+}
+// The scene for one track, chosen by its (rolled-up) status. `updaters` collects per-frame animations.
+function statusScene(cell, t, b, accent, updaters) {
+  const st = t.status, F = 5.6; // F: front strip, towards the plaza
+  const fp = b ? b.footprint : 6;
+  const add = (o, x, y, z, ry = 0) => { o.position.set(x, y, z); o.rotation.y = ry; cell.add(o); return o; };
+  if (st === 'Thoughts') {
+    add(stakes(fp), 0, 0, 0);
+    add(signboard(['FUTURE DEVELOPMENT', 'SPACE · ideas in progress'], { bg: '#fffbeb', fg: '#7c2d12', accent: '#f59e0b' }, 4.6, 2), 0, 0, F);
+  } else if (st === 'Pending User' || st === 'Planning') {
+    add(stakes(fp), 0, 0, 0);
+    const meet = new THREE.Group();
+    meet.add(table());
+    deco(meet, box(1.5, 0.02, 0.9), M('#1d4ed8', { emissive: '#1e3a8a', emissiveIntensity: 0.3 }), -0.2, 0.97, 0); // plans on the table
+    const roll = cyl(0.07, 0.07, 1, 8); [-0.7, 0.75].forEach(x => { const r = deco(meet, roll, cm('#e0f2fe'), x, 1.02, 0.3); r.rotation.z = Math.PI / 2; });
+    // whiteboard on an easel with the drawings
+    const wb = new THREE.Group(); wb.position.set(0, 0, -1.35);
+    deco(wb, box(0.08, 2.4, 0.08), mats.metal, -1.05, 1.2, 0); deco(wb, box(0.08, 2.4, 0.08), mats.metal, 1.05, 1.2, 0);
+    const board = new THREE.Mesh(box(2.3, 1.35, 0.06), [mats.metal, mats.metal, mats.metal, mats.metal,
+      texMat(st === 'Planning' ? ['PLANNING', 'scope · design'] : ['WAITING FOR', 'USER INPUT'], { bg: '#ffffff', fg: st === 'Planning' ? '#0e7490' : '#a15c07', accent: '#94a3b8', drawing: true }), mats.metal]);
+    board.position.y = 1.85; board.castShadow = true; wb.add(board); meet.add(wb);
+    const crew = [
+      person({ hat: 'hard', shirt: '#2563eb', s: 0.95 }), person({ hat: 'hard', hatColor: '#f97316', shirt: '#475569', s: 0.95 }),
+      person({ hat: 'hard', shirt: '#16a34a', s: 0.95 }),
+    ];
+    crew[0].position.set(-1.5, 0, 0.2); crew[0].rotation.y = Math.PI / 2;
+    crew[1].position.set(1.55, 0, 0.1); crew[1].rotation.y = -Math.PI / 2;
+    crew[2].position.set(0.9, 0, -1.0); crew[2].rotation.y = Math.PI * 0.85; crew[2].userData.armR.rotation.x = -1.2; // pointing at the board
+    crew.forEach(c => meet.add(c));
+    add(meet, fp / 2 - 1.2, 0, F - 0.4, 0);
+    updaters.push(time => { crew[0].userData.armR.rotation.x = -0.4 - Math.sin(time * 2.2) * 0.35; crew[1].rotation.y = -Math.PI / 2 + Math.sin(time * 0.9) * 0.25; });
+  } else if (st === 'Developing') {
+    if (b && (t.tier.key === 'house' || t.tier.key === 'tower')) { // scaffolding up the structure
+      const sc = new THREE.Group(), hh = b.height * 0.75, half = fp / 2 - 0.4, pole = cyl(0.06, 0.06, hh, 5), plank = box(fp - 0.8, 0.08, 0.5);
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, c]) => deco(sc, pole, mats.metal, a * half, hh / 2, c * half));
+      for (let y = 2.5; y < hh; y += 3) { deco(sc, plank, mats.wood, 0, y, half); deco(sc, plank, mats.wood, 0, y, -half); }
+      add(sc, 0, 0.2, 0);
+    }
+    if (b && (t.tier.key === 'house' || t.tier.key === 'tower' || t.tier.key === 'pavilion')) { const cr = crane(Math.max(10, b.height + 3)); cr.userData.jib.rotation.y = Math.random() * 6; add(cr, CELL / 2 - 2.2, 0, -CELL / 2 + 2.2); animated.cranes.push(cr); }
+    else add(cones(6, fp / 2 + 0.8), 0, 0, 0);
+    const hammer = person({ hat: 'hard', shirt: '#f97316', vest: true, s: 0.95 }); add(hammer, -fp / 2 + 0.6, 0, F - 0.3, 0.3);
+    deco(hammer.userData.armR, box(0.1, 0.1, 0.5), mats.darkWood, 0, -0.6, 0.18);
+    const carrier = person({ hat: 'hard', shirt: '#0ea5e9', vest: true, s: 0.95 }); add(carrier, 0, 0, F + 0.4, Math.PI / 2);
+    deco(carrier, box(0.18, 0.18, 2.6), mats.wood, 0.25, 1.62, 0); carrier.userData.armR.rotation.x = -2.6;
+    const bricks = new THREE.Group(); const br = box(0.5, 0.25, 0.25), brm = cm('#b45309');
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3 - r; c++) deco(bricks, br, brm, (c - (2 - r) / 2) * 0.52, 0.13 + r * 0.26, 0);
+    add(bricks, fp / 2 - 0.4, 0, F + 0.2);
+    const mixer = new THREE.Group(); deco(mixer, box(1, 0.5, 0.8), cm('#ef4444'), 0, 0.3, 0);
+    const drum = deco(mixer, cyl(0.45, 0.3, 1, 10), cm('#fbbf24'), 0, 1.05, 0); drum.rotation.z = 0.6;
+    add(mixer, fp / 2 + 0.3, 0, F - 1.6);
+    updaters.push(time => {
+      hammer.userData.armR.rotation.x = -1.2 + Math.abs(Math.sin(time * 6)) * 1.1;
+      carrier.position.x = Math.sin(time * 0.6) * (fp / 2 - 1); carrier.rotation.y = Math.cos(time * 0.6) > 0 ? Math.PI / 2 : -Math.PI / 2;
+      drum.rotation.y = time * 2;
+    });
+  } else if (st === 'IT Testing') {
+    add(signboard(['QUALITY CHECK', 'inspection in progress'], { bg: '#f8fafc', fg: '#1d4ed8', accent: '#2563eb' }, 3.8, 1.8), -fp / 2 + 0.6, 0, F + 0.3, 0.25);
+    const tape = new THREE.Group(), tapeMat = M('#facc15'), hp = fp / 2 + 0.9, post = cyl(0.07, 0.07, 1.1, 6);
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, c]) => deco(tape, post, cm('#111827'), a * hp, 0.55, c * hp));
+    deco(tape, box(hp * 2, 0.12, 0.03), tapeMat, 0, 0.95, -hp); deco(tape, box(0.03, 0.12, hp * 2), tapeMat, -hp, 0.95, 0); deco(tape, box(0.03, 0.12, hp * 2), tapeMat, hp, 0.95, 0);
+    add(tape, 0, 0, 0);
+    const insp = person({ hat: 'white', shirt: '#1e293b', vest: true });
+    deco(insp.userData.armR, box(0.4, 0.5, 0.04), cm('#f1f5f9'), 0.05, -0.5, 0.25); insp.userData.armR.rotation.x = -0.9; // clipboard
+    cell.add(insp);
+    const R = fp / 2 + 0.6;
+    updaters.push(time => { // walks round the building, pausing at each side
+      const a = time * 0.35, k = a % (Math.PI / 2), step = Math.floor(a / (Math.PI / 2)) * (Math.PI / 2) + Math.min(k * 1.6, Math.PI / 2);
+      insp.position.set(Math.cos(step) * R, 0, Math.sin(step) * R); insp.rotation.y = -step;
+      insp.userData.armL.rotation.x = Math.sin(time * 3) * 0.3;
+    });
+  } else if (st === 'User Testing') {
+    add(signboard(['VIEWING', 'show unit · owners welcome'], { bg: '#f5f3ff', fg: '#6d28d9', accent: '#7c3aed' }, 3.8, 1.8), -fp / 2 + 0.4, 0, F + 0.3, 0.2);
+    const fam = new THREE.Group();
+    const dad = person({ shirt: '#0ea5e9', pants: '#1e3a8a' }), mum = person({ shirt: '#ec4899', pants: '#334155' });
+    const kid1 = person({ shirt: '#facc15', pants: '#2563eb', s: 0.6 }), kid2 = person({ shirt: '#22c55e', pants: '#7c3aed', s: 0.55 });
+    const pup = dog();
+    dad.position.set(-0.5, 0, 0); mum.position.set(0.5, 0, 0); kid1.position.set(1.3, 0, 0.3); kid2.position.set(-1.3, 0, 0.3); pup.position.set(0.2, 0, 1.0); pup.scale.setScalar(0.9);
+    dad.userData.armR.rotation.x = -1.4; // pointing up at the building
+    [dad, mum, kid1, kid2, pup].forEach(o => fam.add(o));
+    add(fam, 0.8, 0, F + 0.2, Math.PI);
+    updaters.push(time => {
+      fam.position.x = 0.8 + Math.sin(time * 0.35) * 1.6;
+      kid1.position.y = Math.abs(Math.sin(time * 5)) * 0.25; kid2.position.y = Math.abs(Math.sin(time * 5 + 1.5)) * 0.2;
+      pup.userData.tail.rotation.x = Math.sin(time * 14) * 0.6; pup.position.x = 0.2 + Math.sin(time * 1.3) * 0.8;
+    });
+  } else if (st === 'Completed') {
+    const f = flag(accent); add(f, -CELL / 2 + 2, 0.2, -CELL / 2 + 2.5); animated.flags.push(f);
+    // bench with residents
+    const bench = new THREE.Group();
+    deco(bench, box(2.2, 0.12, 0.6), mats.wood, 0, 0.55, 0); deco(bench, box(2.2, 0.5, 0.1), mats.wood, 0, 0.85, -0.28);
+    deco(bench, box(0.1, 0.55, 0.5), mats.darkWood, -1, 0.27, 0); deco(bench, box(0.1, 0.55, 0.5), mats.darkWood, 1, 0.27, 0);
+    const r1 = person({ shirt: '#f97316', s: 0.95 }), r2 = person({ shirt: '#14b8a6', s: 0.95 });
+    r1.position.set(-0.45, -0.32, 0.05); r2.position.set(0.45, -0.32, 0.05); bench.add(r1, r2);
+    add(bench, -fp / 2 + 1, 0, F + 0.2, 0);
+    // string lights between two posts
+    const lights = new THREE.Group(), lp = cyl(0.06, 0.06, 2.4, 6);
+    deco(lights, lp, mats.metal, -2.4, 1.2, 0); deco(lights, lp, mats.metal, 2.4, 1.2, 0);
+    const bulbCols = ['#fde047', '#f472b6', '#60a5fa', '#4ade80', '#fb923c'];
+    for (let i = 0; i <= 10; i++) {
+      const x = -2.4 + i * 0.48, y = 2.3 - Math.sin(i / 10 * Math.PI) * 0.45;
+      const m = new THREE.MeshStandardMaterial({ color: bulbCols[i % 5], emissive: bulbCols[i % 5], emissiveIntensity: 1 });
+      deco(lights, new THREE.SphereGeometry(0.1, 8, 6), m, x, y, 0); animated.partyBulbs.push(m);
+    }
+    add(lights, 1.2, 0, F + 0.9);
+    // pots, mailbox, picnic table
+    const pot = cyl(0.3, 0.22, 0.45, 10), bloom = new THREE.SphereGeometry(0.35, 8, 6);
+    [[fp / 2 + 0.2, F - 1.8, '#ef4444'], [fp / 2 + 0.2, F - 0.6, '#a855f7'], [-fp / 2 - 0.2, F - 1.6, '#f59e0b']].forEach(([x, z, c]) => { deco(cell, pot, cm('#9a3412'), x, 0.42, z); deco(cell, bloom, cm(c), x, 0.85, z); });
+    const mb = new THREE.Group(); deco(mb, cyl(0.06, 0.06, 1.1, 6), mats.metal, 0, 0.55, 0); deco(mb, box(0.45, 0.35, 0.6), cm(accent), 0, 1.2, 0); add(mb, fp / 2 + 0.3, 0, F + 0.5);
+    updaters.push(time => { r1.userData.armR.rotation.x = -0.5 + Math.sin(time * 1.5) * 0.3; });
+  } else { // Void: nothing planned any more
+    add(stakes(fp), 0, 0, 0);
+  }
+}
+
 /* --- trees (instanced) --- */
 function addTrees(parent, spots, { scale = 1, old = false } = {}) {
   if (!spots.length) return;
@@ -434,7 +635,7 @@ function addTrees(parent, spots, { scale = 1, old = false } = {}) {
 
 /* ---------------------------------------------------------- city builder */
 let city = null, model = null;
-const animated = { cranes: [], flags: [], cars: [], fountain: null };
+const animated = { cranes: [], flags: [], cars: [], fountain: null, updaters: [], partyBulbs: [] };
 const pickables = [];
 const plotIndex = new Map(); // id -> { group, center, side, label, trackLabels }
 const builtState = new Map(); // track id -> { solid, total }
@@ -448,7 +649,7 @@ function disposeTree(o) {
 function buildCity() {
   if (city) { scene.remove(city); disposeTree(city); }
   city = new THREE.Group(); scene.add(city);
-  animated.cranes = []; animated.flags = []; animated.cars = []; pickables.length = 0; plotIndex.clear(); builtState.clear();
+  animated.cranes = []; animated.flags = []; animated.cars = []; animated.updaters = []; animated.partyBulbs = []; pickables.length = 0; plotIndex.clear(); builtState.clear();
   model = buildModel();
   const plots = model.plots;
   const sizes = plots.map(p => { const n = Math.max(1, p.tracks.length), cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols); return { cols, rows, w: cols * CELL + 8, d: rows * CELL + 8 }; });
@@ -563,18 +764,17 @@ function buildPlot(g, p, size) {
     // status pad
     const pad = deco(cell, box(CELL - 2.5, 0.2, CELL - 2.5), padMat(t.status), 0, 0.1, 0); pad.receiveShadow = true;
     if (!t.tier) { // every item void: an empty, roped-off lot
-      cell.add(stakes(6));
+      statusScene(cell, { ...t, status: 'Void' }, null, p.accent, animated.updaters);
     } else {
       const b = BUILDERS[t.tier.key](p.accent, t.live);
       b.group.position.y = 0.2;
       cell.add(b.group);
-      applyProgress(b.parts, t.pct);
-      builtState.set(t.id, { solid: b.parts.filter(x => x.solid.visible).length, total: b.parts.length, tier: t.tier.key, crane: t.pct > 0 && t.pct < 1, flag: t.pct === 1 });
-      if (t.pct === 0) cell.add(stakes(b.footprint));
-      else if (t.pct < 1) {
-        if (t.tier.key === 'house' || t.tier.key === 'tower' || t.tier.key === 'pavilion') { const cr = crane(Math.max(10, b.height + 3)); cr.position.set(CELL / 2 - 2.2, 0, -CELL / 2 + 2.2); cr.userData.jib.rotation.y = Math.random() * 6; cell.add(cr); animated.cranes.push(cr); }
-        else { const cs = cones(6, b.footprint / 2 + 0.8); cell.add(cs); }
-      } else { const f = flag(p.accent); f.position.set(-CELL / 2 + 2, 0.2, CELL / 2 - 2); cell.add(f); animated.flags.push(f); }
+      applyProgress(b.parts, t.built);
+      const before = animated.updaters.length, cranesBefore = animated.cranes.length, flagsBefore = animated.flags.length;
+      statusScene(cell, t, b, p.accent, animated.updaters);
+      builtState.set(t.id, { solid: b.parts.filter(x => x.solid.visible).length, total: b.parts.length, tier: t.tier.key, scene: t.status,
+        crane: animated.cranes.length > cranesBefore, flag: animated.flags.length > flagsBefore, animations: animated.updaters.length - before,
+        where: (x = 0, y = 0, z = 0) => cell.localToWorld(new THREE.Vector3(x, y, z)).toArray() });
       const hit = new THREE.Mesh(box(CELL - 2, Math.max(4, b.height), CELL - 2), hitMat); hit.position.y = Math.max(4, b.height) / 2; hit.userData.track = { ...t, plot: p.id, plotName: p.name }; cell.add(hit); pickables.push(hit);
     }
     const tl = labelObj(`<div class="track-label"><i>${esc(t.code)}</i>${esc(t.name.length > 26 ? t.name.slice(0, 25) + '…' : t.name)} · ${Math.round(t.pct * 100)}%</div>`);
@@ -629,6 +829,7 @@ function applySky() {
   sun.color.set(night ? '#ffb27a' : '#fff6e5'); sun.intensity = night ? 1.6 : 3;
   stars.material.opacity = night ? 0.85 : 0;
   mats.window.emissiveIntensity = night ? 1.1 : 0;
+  animated.partyBulbs.forEach(m => { m.emissiveIntensity = night ? 1.6 : 0.35; });
   if (animated.bulbs) animated.bulbs.emissiveIntensity = night ? 1.4 : 0.1;
   renderer && (renderer.toneMappingExposure = night ? 1.1 : 1.0);
   document.getElementById('btnSky').textContent = night ? '☀ Day' : '☾ Twilight';
@@ -701,7 +902,8 @@ function renderPanel() {
       <div class="kicker">Tracks</div>
       ${sel.tracks.map(t => `<div class="row ${hoveredTrack && hoveredTrack.id === t.id ? 'sel' : ''}" data-track="${t.id}"><div class="top"><span class="nm">${esc(t.code)}. ${esc(t.name)}</span><span class="pct">${pctTxt(t.pct)}</span></div>
         <div class="bar" style="width:100%"><div style="width:${pctTxt(t.pct)}"></div></div>
-        <div class="meta"><span>${t.tier ? t.tier.name : 'Empty lot'} · ${t.done}/${t.live} done</span>${statusPill(t.status)}</div></div>`).join('') || '<div class="meta">No tracks yet.</div>'}
+        <div class="meta"><span>${t.tier ? t.tier.name : 'Empty lot'} · ${t.done}/${t.live} done</span>${statusPill(t.status)}</div>
+        <div class="meta">${esc(SCENE_NAME[t.status] || '')}</div></div>`).join('') || '<div class="meta">No tracks yet.</div>'}
       <button class="btn" data-home>← Whole town</button>`;
   }
 }
@@ -744,7 +946,7 @@ function onMove(e) {
   const t = u && u.track;
   renderer.domElement.style.cursor = u ? 'pointer' : '';
   if (t) {
-    tip.innerHTML = `<b>${esc(t.plotName)} · Track ${esc(t.code)}</b>${esc(t.name)}<br>${t.tier.name} (${t.live} work item${t.live === 1 ? '' : 's'}) · <b style="display:inline">${pctTxt(t.pct)} built</b><br>${t.done} of ${t.live} done · ${esc(t.status)}`;
+    tip.innerHTML = `<b>${esc(t.plotName)} · Track ${esc(t.code)}</b>${esc(t.name)}<br>${t.tier.name} (${t.live} work item${t.live === 1 ? '' : 's'}) · <b style="display:inline">${pctTxt(t.pct)} complete</b><br>${esc(SCENE_NAME[t.status] || t.status)} · ${esc(t.status)}<br>${t.done} of ${t.live} done · structure ${pctTxt(t.built)} up`;
     tip.hidden = false;
     tip.style.left = Math.min(innerWidth - 290, e.clientX + 14) + 'px'; tip.style.top = Math.min(innerHeight - 110, e.clientY + 14) + 'px';
   } else tip.hidden = true;
@@ -764,6 +966,7 @@ function animate() {
   if (!reduceMotion) {
     animated.cars.forEach(c => { c.userData.a += c.userData.speed * dt; const a = c.userData.a; c.position.set(Math.cos(a) * c.userData.r, 0, Math.sin(a) * c.userData.r); c.rotation.y = -a - (c.userData.speed > 0 ? -Math.PI / 2 : Math.PI / 2); });
     animated.cranes.forEach((c, i) => { c.userData.jib.rotation.y += dt * (0.15 + (i % 3) * 0.05); });
+    animated.updaters.forEach(fn => fn(t));
     animated.flags.forEach((f, i) => { f.userData.cloth.rotation.y = Math.sin(t * 3 + i) * 0.25; });
     if (animated.fountain) animated.fountain.scale.y = 1 + Math.sin(t * 4) * 0.08;
   }
@@ -789,7 +992,8 @@ async function start() {
   homeView.pos.set(homeView.target.x, d * Math.cos(pol), homeView.target.z + d * Math.sin(pol));
   camera.position.copy(homeView.pos); controls.target.copy(homeView.target);
   applySky(); renderPanel(); updateTownMeter();
-  window.__city = { built: id => builtState.get(id), cam: () => [camera.position.toArray().map(Math.round), controls.target.toArray().map(Math.round)], fly: () => !!fly, model: () => model, plots: () => [...plotIndex.keys()], selectPlot, spawnShootingStar, shooting: () => shooting.length, skyMode: () => skyMode };
+  window.__city = { built: id => builtState.get(id), cam: () => [camera.position.toArray().map(Math.round), controls.target.toArray().map(Math.round)], fly: () => !!fly, model: () => model, plots: () => [...plotIndex.keys()], selectPlot, spawnShootingStar, shooting: () => shooting.length, skyMode: () => skyMode,
+    view: (pos, target) => { fly = null; camera.position.set(...pos); controls.target.set(...target); controls.update(); } };
   animate();
   // live updates from the tracker: rebuild the city, keep the camera where it is
   let timer;
