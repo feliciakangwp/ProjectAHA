@@ -29,7 +29,8 @@ Data is stored in Supabase; people sign in with email and password.
   and builders (Developing), an inspector in a safety helmet (IT Testing), a family with children and a
   dog viewing the place (User Testing), and residents, string lights and flowers (Completed).
   Old villages lie outside the town wall, cars circle the ring road and shooting stars cross the sky.
-  Hover a building for its progress, click a plot to fly there and list its tracks. Live, read-only.
+  Hover a building for its progress, click a plot to fly there and list its tracks. The details panel and
+  the key fold away to small chips (the choice is remembered) so the city can be seen. Live, read-only.
 - **Unlimited nesting**: Track 1 → 1a → 1a.1 → 1a.1.1 … Codes renumber automatically.
 - **Roll-up status**: a track or parent item shows the *lowest* status of its sub-items
   (Thoughts < Pending User < Planning < Developing < IT Testing < User Testing < Completed). Void items are ignored.

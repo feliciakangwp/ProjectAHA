@@ -50,8 +50,19 @@
   .bar { height: 6px; width: 90px; background: var(--track); border-radius: 99px; overflow: hidden; }
   .bar > div { height: 100%; background: var(--good); border-radius: 99px; }
 
-  #panel { position: fixed; right: 12px; top: 84px; bottom: 12px; width: 330px; overflow: auto; padding: 16px; z-index: 9; display: flex; flex-direction: column; gap: 12px; }
+  #panel { position: fixed; right: 12px; top: 84px; max-height: calc(100vh - 96px); width: 330px; overflow: auto; padding: 16px; z-index: 9; display: flex; flex-direction: column; gap: 12px; }
   #panel h2 { margin: 0; font-size: 18px; }
+  #panelBody { display: flex; flex-direction: column; gap: 12px; }
+  /* Panel and key fold down to a small chip so the city can be seen */
+  .hud-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; border: 0; background: none; padding: 0; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; cursor: pointer; }
+  .hud-toggle:hover { color: var(--primary); }
+  .hud-toggle .chev { font-size: 13px; transition: transform .15s; }
+  .collapsed .hud-toggle .chev { transform: rotate(-90deg); }
+  #panelSum b { font-family: var(--mono); color: var(--ink); margin-left: 6px; letter-spacing: 0; }
+  #panel:not(.collapsed) #panelSum, #panel.collapsed .when-open { display: none; }
+  #panel.collapsed { bottom: auto; width: auto; min-width: 190px; padding: 10px 14px; }
+  #legend.collapsed { padding: 10px 14px; }
+  .collapsed #panelBody, .collapsed #legendBody { display: none; }
   #panel .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; }
   .row { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--hud-solid); text-align: left; width: 100%; }
   button.row:hover, .row.sel { border-color: var(--primary); }
@@ -66,6 +77,8 @@
   .collapse { display: none; }
 
   #legend { position: fixed; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); padding: 12px 14px; z-index: 9; font-size: 12.5px; max-width: 360px; }
+  #legend .hud-toggle { margin-bottom: 8px; }
+  #legend.collapsed .hud-toggle { margin-bottom: 0; }
   #legend h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
   #legend .tiers { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin-bottom: 8px; }
   #legend .tiers b { font-weight: 600; }
@@ -96,6 +109,7 @@
   @media (max-width: 760px) {
     .brand .sub { display: none; }
     #panel { top: auto; left: 12px; right: 12px; width: auto; max-height: 42vh; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+    #panel.collapsed { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
     #legend { display: none; }
     .bar { width: 60px; }
   }
@@ -125,9 +139,14 @@
   </div>
 </div>
 
-<aside id="panel" class="glass" aria-live="polite"></aside>
+<aside id="panel" class="glass">
+  <button class="hud-toggle" id="panelToggle" aria-expanded="true" aria-controls="panelBody" title="Show or hide the details"><span id="panelSum">Project AHA</span><span class="when-open">Hide details</span><span class="chev" aria-hidden="true">▾</span></button>
+  <div id="panelBody" aria-live="polite"></div>
+</aside>
 
 <div id="legend" class="glass">
+  <button class="hud-toggle" id="legendToggle" aria-expanded="true" aria-controls="legendBody" title="Show or hide the key"><span>Key</span><span class="chev" aria-hidden="true">▾</span></button>
+  <div id="legendBody">
   <h3>Track size → building</h3>
   <div class="tiers">
     <b>Swing</b><span>1 work item</span>
@@ -136,19 +155,10 @@
     <b>House</b><span>5–7 work items</span>
     <b>Tower</b><span>8 or more</span>
   </div>
-  <h3>Track status → what happens on site</h3>
-  <div class="tiers">
-    <b>Thoughts</b><span>“Future development space” sign</span>
-    <b>Pending / Planning</b><span>Workers planning round a table and whiteboard</span>
-    <b>Developing</b><span>Construction: scaffolding, crane, builders</span>
-    <b>IT Testing</b><span>Inspector in a safety helmet checking the build</span>
-    <b>User Testing</b><span>A family viewing the place</span>
-    <b>Completed</b><span>Lived in: residents, lights and decorations</span>
-  </div>
   <div class="keys">
     <span><span class="k-solid"></span>Built</span>
     <span><span class="k-blue"></span>Blueprint (still to build)</span>
-    <span>Developing items count half; IT Testing onwards the structure stands</span>
+  </div>
   </div>
 </div>
 
@@ -887,12 +897,23 @@ function flyTo(pos, target, ms = 1100) { fly = { fromP: camera.position.clone(),
 function goHome(animate = true) { selectPlot(null); animate ? flyTo(homeView.pos.clone(), homeView.target.clone()) : (camera.position.copy(homeView.pos), controls.target.copy(homeView.target)); }
 
 /* --------------------------------------------------------------- panel */
-const panel = document.getElementById('panel');
+const panel = document.getElementById('panelBody');
+// Panel and key can be folded away; the choice is remembered in this browser.
+const HUD_KEY = 'projectAHA.city.hud';
+const hud = (() => { try { return { panel: true, legend: false, ...JSON.parse(localStorage.getItem(HUD_KEY) || '{}') }; } catch { return { panel: true, legend: false }; } })();
+function setHud(which, open, remember = true) {
+  hud[which] = open;
+  const box = document.getElementById(which), btn = document.getElementById(which + 'Toggle');
+  box.classList.toggle('collapsed', !open); btn.setAttribute('aria-expanded', open);
+  if (remember) try { localStorage.setItem(HUD_KEY, JSON.stringify(hud)); } catch {}
+}
+['panel', 'legend'].forEach(w => { setHud(w, hud[w], false); document.getElementById(w + 'Toggle').addEventListener('click', () => setHud(w, !hud[w])); });
 const pctTxt = p => `${Math.round(p * 100)}%`;
 const statusPill = s => `<span class="pill"><span class="dot" style="background:${STATUS_HEX[s] || '#999'}"></span>${esc(s)}</span>`;
 function renderPanel() {
   if (!model) return;
   const sel = selectedPlot && model.plots.find(p => p.id === selectedPlot);
+  document.getElementById('panelSum').innerHTML = `${esc(sel ? sel.name : 'Project AHA')}<b>${pctTxt(sel ? sel.pct : model.pct)}</b>`;
   if (!sel) {
     panel.innerHTML = `<div class="kicker">The town</div><h2>Project AHA</h2>
       <div class="row"><div class="top"><span class="nm">Overall</span><span class="pct">${pctTxt(model.pct)}</span></div><div class="bar" style="width:100%"><div style="width:${pctTxt(model.pct)}"></div></div>
@@ -927,6 +948,7 @@ function selectPlot(id, fly = false) {
   selectedPlot = id;
   plotIndex.forEach((v, k) => { v.label.element.classList.toggle('sel', k === id); v.trackLabels.forEach(l => { l.visible = k === id; }); });
   if (id && fly) {
+    if (!hud.panel) setHud('panel', true, false); // visiting a plot shows its details
     const v = plotIndex.get(id); if (v) {
       const out = new THREE.Vector3(Math.cos(v.angle), 0, Math.sin(v.angle));
       const target = v.center.clone().setY(4);
