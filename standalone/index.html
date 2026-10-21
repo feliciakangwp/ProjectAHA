@@ -1,0 +1,2095 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project AHA Tracker</title>
+<script>try { var t = localStorage.getItem('projectAHA.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="data.js"></script>
+<script src="adapter.js"></script>
+<style>
+  /* Layout: summary tiles on top, then a track sidebar beside the two boards (by track, by status). */
+  :root {
+    --bg: #eef2f6; --surface: #ffffff; --surface-2: #f6f8fb; --border: #dfe5ec; --border-strong: #c5cfdb;
+    --ink: #0f1b2d; --ink-2: #33415a; --muted: #5f6d82; --faint: #8f9bad;
+    --primary: #1f5fd6; --primary-ink: #ffffff; --primary-soft: #eaf1fd;
+    --inverse: #0f1b2d; --inverse-ink: #ffffff; --inverse-muted: #b9c4d3;
+    --danger: #b42318; --danger-soft: #fdf0ee; --warn: #a15c07; --warn-soft: #fef7e6; --warn-line: #f5d58a;
+    --info-soft: #ecf8f6; --info-ink: #13574f; --info-line: #a6dfd6;
+    --tag-bg: #edf0fb; --tag-ink: #33408f; --track: #e2e8ef; --col: #e6ecf3;
+    --s-thoughts: #64748b; --s-thoughts-bg: #eef1f5; --s-thoughts-ink: #475569;
+    --s-pending: #d97706; --s-pending-bg: #fef6e7; --s-pending-ink: #a15c07;
+    --s-planning: #0891b2; --s-planning-bg: #e8f8fb; --s-planning-ink: #0e6a85;
+    --s-dev: #ea580c; --s-dev-bg: #fff2e8; --s-dev-ink: #b8430b;
+    --s-it: #2563eb; --s-it-bg: #ebf2fe; --s-it-ink: #1d4ed8;
+    --s-ut: #7c3aed; --s-ut-bg: #f3effe; --s-ut-ink: #6d28d9;
+    --s-done: #047857; --s-done-bg: #e8f7f0; --s-done-ink: #047857;
+    --s-void: #a8a29e; --s-void-bg: #f3f2f1; --s-void-ink: #78716c;
+    --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --radius: 12px; --shadow: 0 1px 2px rgba(15,27,45,.06);
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0d141f; --surface: #151e2b; --surface-2: #1b2636; --border: #283547; --border-strong: #3a4a60;
+    --ink: #e8eef6; --ink-2: #c3cedc; --muted: #93a1b5; --faint: #6c7a8f;
+    --primary: #5b93f5; --primary-ink: #0b1220; --primary-soft: #1a2a45;
+    --inverse: #e8eef6; --inverse-ink: #0d141f; --inverse-muted: #4b5a70;
+    --danger: #f2877b; --danger-soft: #3a1c1a; --warn: #f0b75a; --warn-soft: #33270f; --warn-line: #5c4615;
+    --info-soft: #11302c; --info-ink: #8adbd0; --info-line: #1f5149;
+    --tag-bg: #242c4a; --tag-ink: #b4bef0; --track: #283547; --col: #111a26;
+    --s-thoughts: #94a3b8; --s-thoughts-bg: #232e3d; --s-thoughts-ink: #b8c3d1;
+    --s-pending: #f0a33a; --s-pending-bg: #35270f; --s-pending-ink: #f5bf6a;
+    --s-planning: #2fb8d8; --s-planning-bg: #0f2f38; --s-planning-ink: #7dd6ea;
+    --s-dev: #f57b3a; --s-dev-bg: #3a2113; --s-dev-ink: #fba277;
+    --s-it: #5b93f5; --s-it-bg: #182a4a; --s-it-ink: #9cbcf8;
+    --s-ut: #a07cf3; --s-ut-bg: #2a1f47; --s-ut-ink: #c4adf8;
+    --s-done: #34b383; --s-done-bg: #10332a; --s-done-ink: #6fd3ab;
+    --s-void: #8a8580; --s-void-bg: #262422; --s-void-ink: #a9a49f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #0d141f; --surface: #151e2b; --surface-2: #1b2636; --border: #283547; --border-strong: #3a4a60;
+    --ink: #e8eef6; --ink-2: #c3cedc; --muted: #93a1b5; --faint: #6c7a8f;
+    --primary: #5b93f5; --primary-ink: #0b1220; --primary-soft: #1a2a45;
+    --inverse: #e8eef6; --inverse-ink: #0d141f; --inverse-muted: #4b5a70;
+    --danger: #f2877b; --danger-soft: #3a1c1a; --warn: #f0b75a; --warn-soft: #33270f; --warn-line: #5c4615;
+    --info-soft: #11302c; --info-ink: #8adbd0; --info-line: #1f5149;
+    --tag-bg: #242c4a; --tag-ink: #b4bef0; --track: #283547; --col: #111a26;
+    --s-thoughts: #94a3b8; --s-thoughts-bg: #232e3d; --s-thoughts-ink: #b8c3d1;
+    --s-pending: #f0a33a; --s-pending-bg: #35270f; --s-pending-ink: #f5bf6a;
+    --s-planning: #2fb8d8; --s-planning-bg: #0f2f38; --s-planning-ink: #7dd6ea;
+    --s-dev: #f57b3a; --s-dev-bg: #3a2113; --s-dev-ink: #fba277;
+    --s-it: #5b93f5; --s-it-bg: #182a4a; --s-it-ink: #9cbcf8;
+    --s-ut: #a07cf3; --s-ut-bg: #2a1f47; --s-ut-ink: #c4adf8;
+    --s-done: #34b383; --s-done-bg: #10332a; --s-done-ink: #6fd3ab;
+    --s-void: #8a8580; --s-void-bg: #262422; --s-void-ink: #a9a49f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .mode-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .confirm-text { color: var(--ink-2); margin: 0; }
+  .userbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .userbar .who { color: var(--ink-2); font-weight: 500; }
+  .role { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 6px; }
+  .role.edit { background: var(--s-done-bg); color: var(--s-done-ink); }
+  .role.view { background: var(--tag-bg); color: var(--tag-ink); }
+  .error-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px 16px; background: var(--danger-soft); color: var(--danger); border-bottom: 1px solid var(--danger); font-size: 13.5px; }
+  .error-bar .msg { flex: 1; min-width: 0; font-weight: 500; }
+  .error-bar .btns { display: flex; gap: 6px; flex: none; }
+  .auth-wrap { min-height: 80vh; display: grid; place-items: center; padding-block: 40px; }
+  .auth-card { width: 100%; max-width: 400px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .auth-card h2 { margin: 0; font-size: 22px; }
+  .auth-card form { display: flex; flex-direction: column; gap: 14px; }
+  .auth-card .field input { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 9px 11px; background: var(--surface); }
+  .auth-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .theme-btn { white-space: nowrap; }
+  .auth-brand { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+  .auth-sub { margin: 0; color: var(--muted); }
+  .auth-msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+  .auth-msg.error { background: var(--danger-soft); color: var(--danger); }
+  .auth-msg.ok { background: var(--s-done-bg); color: var(--s-done-ink); }
+  .btn.block { width: 100%; padding-block: 10px; }
+  .btn:disabled { opacity: .6; cursor: progress; }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 24px 32px 64px; }
+
+  /* Header + nav */
+  .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; text-wrap: balance; }
+  h1, h2, h3 { text-wrap: balance; }
+  .sub { color: var(--muted); margin-top: 4px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 14px; white-space: nowrap; }
+  .btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 6px; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+  .btn.primary:hover { filter: brightness(1.08); }
+    .btn.sm { padding: 4px 10px; font-size: 13px; border-radius: 7px; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
+  .btn.danger { color: var(--danger); }
+  .tabs { display: flex; gap: 6px; margin: 20px 0 18px; flex-wrap: wrap; align-items: center; }
+  .tab { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 7px 16px; font-weight: 500; }
+  .tab.active { background: var(--inverse); color: var(--inverse-ink); border-color: var(--inverse); }
+  .tab .n { color: var(--faint); font-size: 12px; margin-left: 6px; }
+  .tab.active .n { color: var(--inverse-muted); }
+  .tab.add { border-style: dashed; color: var(--primary); }
+
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .kpi { padding: 18px 20px; }
+  .kpi.hero { border: 2px solid var(--primary); }
+  .kpi .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 6px; }
+  .kpi .val { font-family: var(--mono); font-size: 30px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.02em; }
+  .kpi .hint { font-size: 12px; color: var(--muted); }
+  .kpi .val.bad { color: var(--danger); }
+
+  .banner.info { border-color: var(--info-line); background: var(--info-soft); color: var(--info-ink); }
+  .banner { margin: 16px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--warn); font-size: 13px; }
+
+  /* Status */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  select.status { border: 1px solid transparent; border-radius: 7px; padding: 3px 6px; font-size: 12.5px; font-weight: 600; }
+  select.status:disabled { opacity: 1; cursor: not-allowed; }
+
+  /* Overview */
+  .section-title { display: flex; justify-content: space-between; align-items: baseline; margin: 28px 0 12px; }
+  .section-title h2 { margin: 0; font-size: 19px; }
+  .section-title .meta { color: var(--muted); font-size: 13px; }
+  .dist { padding: 18px 20px; }
+  .stackbar { display: flex; gap: 2px; height: 14px; margin: 10px 0 12px; }
+  .stackbar > div { height: 100%; min-width: 4px; }
+  .stackbar > div:first-child { border-radius: 4px 0 0 4px; }
+  .stackbar > div:last-child { border-radius: 0 4px 4px 0; }
+  .stackbar > div:only-child { border-radius: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend b { color: var(--ink); }
+  .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .inits { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .init { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .init-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .init-head h3 { margin: 0; font-size: 17px; }
+  .init-head .desc { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .bar { height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--s-done); border-radius: 999px; }
+  .prog-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .prog-row b { color: var(--ink); }
+  .tracklist { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+  .trackrow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .trackrow:last-child { border-bottom: 0; }
+  .trackrow .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trackrow .c { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .code { color: var(--faint); font-family: var(--mono); font-size: .92em; font-weight: 600; margin-right: 6px; }
+  .init.add { align-items: center; justify-content: center; border-style: dashed; color: var(--primary); min-height: 160px; cursor: pointer; background: transparent; }
+  .dl { padding: 8px 0; }
+  .dl-item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .dl-item:last-child { border-bottom: 0; }
+  .dl-item:hover { background: var(--surface-2); }
+  .dl-item .nm { font-weight: 500; }
+  .dl-item .path { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); padding: 18px; text-align: center; font-size: 13px; }
+
+  /* Due chips */
+  .due { font-size: 12px; font-weight: 600; white-space: nowrap; padding: 2px 8px; border-radius: 6px; }
+  .due.over { color: var(--danger); background: var(--danger-soft); }
+  .due.soon { color: var(--warn); background: var(--warn-soft); }
+  .due.later { color: var(--muted); background: var(--surface-2); }
+  .due.done { color: var(--faint); }
+
+  /* Work panel */
+  .work { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
+  .work > section { min-width: 0; }
+  .side { padding: 16px; position: sticky; top: 12px; }
+  .side h4 { margin: 4px 8px 10px; font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+  .side-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; }
+  .side-item:hover { background: var(--surface-2); }
+  .side-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+  .side-item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side-item .n { color: var(--faint); font-size: 12px; }
+  .side .foot { margin-top: 16px; padding: 12px 8px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .side .foot .big { font-size: 18px; font-weight: 700; color: var(--ink); margin: 4px 0 6px; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .toolbar input[type=search] { flex: 1; min-width: 200px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 12px; }
+  .toolbar select { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 10px; }
+  .toolbar label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); }
+  .seg button { border: 0; background: transparent; padding: 8px 16px; }
+  .seg button.on { background: var(--inverse); color: var(--inverse-ink); }
+  .work-head { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0 10px; gap: 10px; }
+  .work-head h3 { margin: 0; font-size: 18px; }
+  .work-head .meta { color: var(--muted); font-size: 13px; }
+
+  /* Shared item bits */
+  .meta-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .tag { white-space: nowrap; display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--tag-bg); color: var(--tag-ink); font-weight: 500; }
+  .tag.link { background: var(--info-soft); color: var(--info-ink); }
+  .tag.derived { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  input[type=date].dl-input { border: 1px solid var(--border); border-radius: 7px; padding: 3px 6px; font-size: 12.5px; background: var(--surface); color: var(--ink-2); max-width: 100%; }
+  .cb { width: 20px; height: 20px; accent-color: var(--s-done); flex: none; }
+  .toggle { border: 0; background: transparent; color: var(--muted); border-radius: 6px; font-size: 12px; padding: 2px 6px; }
+  .toggle:hover { background: var(--surface-2); color: var(--ink); }
+
+  /* Track board: one column per track (or per initiative on the overview) */
+  .tboard { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(300px, 340px); gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: start; }
+  .tcol { background: var(--col); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 78vh; }
+  .tcol-head { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 4px solid var(--tc, var(--border-strong)); }
+  .tcol-head .t { font-weight: 700; font-size: 15px; line-height: 1.3; }
+  .tcol-head.linkcol { border-top-color: var(--info-ink); }
+  .tcol-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 40px; padding-right: 2px; }
+  .tcol-empty { font-size: 12.5px; color: var(--muted); text-align: center; padding: 14px 6px; border: 1px dashed var(--border-strong); border-radius: 10px; }
+  .ctrls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ctrls .grow { flex: 1; }
+  .mini-bar { height: 5px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .mini-bar > div { height: 100%; background: var(--s-done); }
+  .icard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; border-left: 3px solid var(--sc, var(--border)); }
+  .icard.done { background: var(--surface-2); }
+  .icard.done > .ihead .name { color: var(--faint); text-decoration: line-through; }
+  .ihead { display: flex; gap: 8px; align-items: flex-start; }
+  .ihead .name { font-weight: 600; flex: 1; min-width: 0; line-height: 1.35; }
+  .ihead .name a { color: inherit; text-decoration: none; }
+  .ihead .name a:hover { text-decoration: underline; }
+  .subs { border-top: 1px solid var(--border); padding-top: 6px; display: flex; flex-direction: column; }
+  .srow { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; }
+  .srow + .srow { border-top: 1px dashed var(--border); }
+  .srow .nm { flex: 1; min-width: 0; line-height: 1.3; }
+  .srow.done .nm { color: var(--faint); text-decoration: line-through; }
+  .srow .cb { width: 16px; height: 16px; }
+  .srow select.status { font-size: 11.5px; padding: 1px 4px; max-width: 118px; }
+  .srow .btn.sm { padding: 2px 7px; font-size: 12px; }
+  .qa { display: flex; flex-direction: column; gap: 6px; }
+  .qa-btn { width: 100%; text-align: left; border: 1px dashed var(--border-strong); background: transparent; color: var(--primary); border-radius: 10px; padding: 9px 12px; font-weight: 600; }
+  .qa-btn:hover { background: var(--surface); border-style: solid; }
+  .qa-form { background: var(--surface); border: 1px solid var(--primary); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow); }
+  .qa-form label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .qa-form input { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .qa-form .help { font-size: 11.5px; color: var(--muted); }
+  .tcol-add { background: transparent; border: 2px dashed var(--border); }
+  /* Roadmap: one lane per track (or initiative), one row per item, bars on a month scale */
+  .rm-tools { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rm-tools .seg button { padding: 6px 12px; font-size: 13px; }
+  .rm-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-2); align-items: center; }
+  .rm-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .rm-key-bar { width: 18px; height: 8px; border-radius: 3px; background: var(--s-it-bg); border: 1px solid var(--s-it); border-left-width: 3px; }
+  .rm-key-ms { width: 9px; height: 9px; transform: rotate(45deg); background: var(--ink-2); }
+  .rm-key-today { width: 2px; height: 12px; background: var(--primary); }
+  .rm { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .rm-grid { position: relative; }
+  .rm-row { display: flex; min-height: 34px; border-bottom: 1px solid var(--border); }
+  .rm-row:last-child { border-bottom: 0; }
+  .rm-label { position: sticky; left: 0; z-index: 3; flex: none; width: var(--rm-label); background: var(--surface); border-right: 1px solid var(--border); padding: 6px 10px; display: flex; align-items: center; gap: 6px; font-size: 13px; min-width: 0; }
+  .rm-label .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rm-time { position: relative; flex: none; }
+  .rm-head { position: sticky; top: 0; z-index: 4; min-height: 46px; background: var(--surface-2); }
+  .rm-head .rm-label { background: var(--surface-2); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+  .rm-q, .rm-m { position: absolute; font-size: 11px; color: var(--muted); white-space: nowrap; padding-left: 6px; border-left: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .rm-q { top: 4px; height: 18px; font-weight: 700; color: var(--ink-2); }
+  .rm-m { top: 24px; height: 20px; }
+  .rm-lane { background: var(--surface-2); min-height: 40px; }
+  .rm-lane .rm-label { background: var(--surface-2); font-weight: 700; }
+  .rm-lane .pct { font-size: 11.5px; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rm-overlay { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; }
+  .rm-gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .rm-gl.q { background: var(--border-strong); }
+  .rm-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary); }
+  .rm-today span { position: absolute; top: 2px; left: 4px; font-size: 10.5px; font-weight: 700; color: var(--primary); background: var(--surface-2); padding: 0 3px; border-radius: 3px; white-space: nowrap; }
+  .rm-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 20px; border-radius: 4px; background: var(--b-bg); border: 1px solid var(--b-c); border-left-width: 4px; color: var(--ink); font-size: 11.5px; line-height: 18px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; cursor: default; font-variant-numeric: tabular-nums; }
+  .rm-bar.thin { height: 8px; border-width: 0; border-radius: 4px; background: var(--b-c); opacity: .55; padding: 0; }
+  .rm-bar.late { box-shadow: 0 0 0 2px var(--danger); }
+  .rm-bar.closed { opacity: .55; }
+  button.rm-bar, button.rm-ms { cursor: pointer; font: inherit; }
+  .rm-ms { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; transform: rotate(45deg); background: var(--b-c); border: 2px solid var(--surface); z-index: 2; padding: 0; }
+  .rm-ms.late { outline: 2px solid var(--danger); }
+  .rm-ms-label { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; z-index: 2; padding-left: 10px; font-variant-numeric: tabular-nums; }
+  .rm-none { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0 6px; white-space: nowrap; z-index: 2; background: var(--surface); }
+  .rm-none:is(button) { cursor: pointer; font: inherit; font-size: 11px; color: var(--muted); }
+  .rm-none:is(button):hover { border-color: var(--primary); color: var(--primary); }
+  .qboard { grid-auto-columns: minmax(300px, 1fr); }
+  .qcol .tcol-body { gap: 12px; }
+  .qgroup { display: flex; flex-direction: column; gap: 6px; }
+  button.qcard { text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+  button.qcard:hover { border-color: var(--primary); }
+  /* Work | Scorecard switch under the initiative tabs */
+  .page-tabs { display: flex; gap: 4px; margin: -6px 0 18px; border-bottom: 1px solid var(--border); }
+  .page-tabs button { border: 0; background: transparent; padding: 8px 14px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .page-tabs button.on { color: var(--ink); border-bottom-color: var(--primary); }
+  .page-tabs .n { color: var(--faint); font-size: 12px; margin-left: 4px; font-weight: 500; }
+  /* Scorecard */
+  .ns { padding: 18px 20px; display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; border-left: 4px solid var(--warn); }
+  .ns-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--warn); white-space: nowrap; }
+  .ns-text { flex: 1; min-width: 220px; font-size: 18px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
+  .ns-line { font-size: 14px; color: var(--ink-2); margin: 0 0 12px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .okr-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 14px; }
+  .okr-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .okr-group { margin-bottom: 18px; }
+  .okr-group h3.obj { font-size: 15px; margin: 0 0 10px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .obj-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .okr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .okr { text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; cursor: pointer; box-shadow: var(--shadow); min-width: 0; }
+  .okr:hover { border-color: var(--primary); }
+  .okr.add { align-items: center; justify-content: center; border: 2px dashed var(--border-strong); color: var(--primary); font-weight: 700; background: transparent; box-shadow: none; min-height: 150px; text-align: center; }
+  .okr-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .okr-kr { font-weight: 700; line-height: 1.3; }
+  .okr-mid { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+  .okr-now { font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .spark { flex: none; }
+  .chg { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chg.good { color: var(--s-done-ink); } .chg.bad { color: var(--danger); } .chg.flat { color: var(--muted); }
+  .sc-init { margin-bottom: 26px; }
+  .modal.wide { max-width: 900px; }
+  .okr-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .okr-facts > div { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+  .okr-facts > div > span:first-child { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+  .okr-facts b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .okr-facts em { font-style: normal; font-size: 12px; color: var(--muted); }
+  .chart-wrap { position: relative; overflow-x: auto; }
+  .okr-chart { display: block; max-width: none; }
+  .okr-chart .ax { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .okr-chart .ref { font-size: 11.5px; font-weight: 600; fill: var(--ink-2); }
+  .okr-chart .lastv { font-size: 12px; font-weight: 700; fill: var(--ink); font-variant-numeric: tabular-nums; }
+  .chart-tip { position: absolute; pointer-events: none; background: var(--inverse); color: var(--inverse-ink); font-size: 12px; padding: 6px 9px; border-radius: 7px; white-space: pre-line; max-width: 220px; z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+  .lg-line { display: inline-block; width: 20px; height: 0; border-top: 2px dashed; vertical-align: middle; }
+  .res-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .res-form .field { margin: 0; width: 150px; } .res-form .field.grow { flex: 1; min-width: 160px; width: auto; }
+  .res-form input { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .res-table-wrap { overflow-x: auto; }
+  .res-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .res-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .res-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+  .res-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .res-table .good { color: var(--s-done-ink); } .res-table .bad { color: var(--danger); }
+  .res-table tr.base td { color: var(--muted); font-style: italic; }
+  .res-table .row-acts { white-space: nowrap; text-align: right; }
+  .res-table .row-acts .btn + .btn { margin-left: 4px; }
+  .res-table tr.editing td { background: var(--primary-soft); }
+  .res-table tr.editing input { width: 100%; min-width: 90px; border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 7px; background: var(--surface); font: inherit; }
+  .res-table tr.editing input[type=number] { text-align: right; }
+  .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+
+  /* Board */
+  .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+  .col { background: var(--col); border-radius: 12px; padding: 10px; min-height: 240px; }
+  .col.over { outline: 2px dashed var(--primary); outline-offset: -2px; }
+  .col-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; padding: 4px 4px 10px; }
+  .col-head span { display: inline-flex; gap: 6px; align-items: center; }
+  .bcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: grab; box-shadow: var(--shadow); }
+  .bcard.dragging { opacity: .4; }
+  .bcard.done .name { color: var(--faint); text-decoration: line-through; }
+  .bcard .name { font-weight: 600; margin-bottom: 4px; }
+  .bcard .path { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .bcard .foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+  /* Modal */
+  .backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 50; overflow-y: auto; }
+  .modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 560px; box-shadow: 0 20px 50px rgba(15,23,42,.25); }
+  .modal header { padding: 18px 22px 0; display: flex; justify-content: space-between; align-items: center; }
+  .modal header h3 { margin: 0; font-size: 18px; }
+  .modal .body { padding: 16px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .modal footer { padding: 14px 22px 18px; display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 5px; }
+  .field input[type=text], .field input[type=date], .field select, .field textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .field textarea { min-height: 70px; resize: vertical; }
+  .field .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .checks label { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; margin: 0; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--inverse); color: var(--inverse-ink); padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+
+  @media (max-width: 960px) {
+    .work { grid-template-columns: 1fr; }
+    .side { position: static; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 16px 16px 48px; }
+    h1 { font-size: 24px; }
+    .tboard { grid-auto-columns: minmax(260px, 86vw); }
+    .rm-grid { --rm-label: 140px !important; }
+    .rm-label { font-size: 12px; padding-inline: 6px; }
+    .two { grid-template-columns: 1fr; }
+    .inits { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="error-bar" id="errorBar" role="alert" hidden>
+  <span class="msg" data-msg></span>
+  <span class="btns"><button class="btn sm" data-retry hidden>Try again</button><button class="btn sm" onclick="hideError()">Dismiss</button></span>
+</div>
+<div class="wrap" id="app"></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script>
+/* =========================================================================
+   Project AHA — Finance Transformation tracker
+   Data lives in the browser (localStorage). Use "Backup" / "Restore" to move
+   it between machines and "Export Excel" for reporting.
+   ========================================================================= */
+
+const UI_KEY = 'projectAHA.ui.v1';
+const THEME_KEY = 'projectAHA.theme';
+
+/* Light / dark: follows the device until the person picks one; the choice is
+   remembered in this browser. Colours are all CSS tokens, so charts follow too. */
+const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+const currentTheme = () => document.documentElement.dataset.theme || (systemDark && systemDark.matches ? 'dark' : 'light');
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  render();
+}
+const themeButton = () => { const dark = currentTheme() === 'dark';
+  return `<button class="btn sm ghost theme-btn" data-act="theme" aria-label="Switch to ${dark ? 'light' : 'dark'} mode" title="Switch to ${dark ? 'light' : 'dark'} mode"><span aria-hidden="true">${dark ? '☀' : '☾'}</span> ${dark ? 'Light' : 'Dark'}</button>`; };
+if (systemDark && systemDark.addEventListener) systemDark.addEventListener('change', () => { if (!document.documentElement.dataset.theme) render(); });
+
+// Order matters: lowest progress first. A parent shows the lowest status of its children.
+const STATUSES = ['Thoughts', 'Pending User', 'Planning', 'Developing', 'IT Testing', 'User Testing', 'Completed', 'Void'];
+const STATUS_KEY = { 'Thoughts': 'thoughts', 'Pending User': 'pending', 'Planning': 'planning', 'Developing': 'dev', 'IT Testing': 'it', 'User Testing': 'ut', 'Completed': 'done', 'Void': 'void' };
+const STATUS_META = Object.fromEntries(STATUSES.map(st => { const k = STATUS_KEY[st]; return [st, { color: `var(--s-${k})`, bg: `var(--s-${k}-bg)`, ink: `var(--s-${k}-ink)` }]; }));
+const RANK = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
+const isClosed = s => s === 'Completed' || s === 'Void';
+
+// Database ids are UUIDs; older browsers without randomUUID get an equivalent v4 id.
+const uid = () => crypto.randomUUID ? crypto.randomUUID()
+  : ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* -------------------------------------------------------------- data */
+// All loading and saving goes through window.AHA_ADAPTER (adapter.js), so a different
+// database can be plugged in by replacing that one file. There is no sign-in: everyone edits.
+const ADAPTER = window.AHA_ADAPTER;
+
+let db = { initiatives: [], items: [], okrs: [], results: [] }, ui;
+const store = {
+  loaded: false, loading: false, hasStartDate: true, hasOkrs: true, hasNorthStar: true,
+  live: 'on', queue: Promise.resolve(),
+};
+const auth = { screen: 'app' };
+const canEdit = () => true;
+
+function loadUI() {
+  try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
+  ui = Object.assign({ view: 'overview', track: 'all', mode: 'tracks', search: '', status: 'all', hideDone: false, overdueOnly: false, collapsed: [], page: 'work', rmZoom: 'months', rmUnscheduled: true, rmCollapsed: [] }, ui);
+  normalizeMode();
+}
+function normalizeMode() { if (ui.mode === 'board') ui.mode = 'status'; if (!['status', 'roadmap'].includes(ui.mode)) ui.mode = 'tracks'; }
+function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
+
+// Turn a storage error into a sentence a person can act on.
+function explain(err, doing) {
+  const msg = (err && (err.message || String(err))) || '';
+  if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(msg)) return `Could not ${doing}: no connection to the database. Check your internet connection and try again.`;
+  if (/quota/i.test(msg)) return `Could not ${doing}: browser storage is full. Use Backup, then clear old data.`;
+  return `Could not ${doing}${msg ? `: ${msg}` : '.'}`;
+}
+
+// Error banner sits outside #app so re-renders do not clear it.
+function showError(message, retry, kind = 'other') {
+  const bar = document.getElementById('errorBar');
+  bar.dataset.kind = kind;
+  bar.querySelector('[data-msg]').textContent = message;
+  const r = bar.querySelector('[data-retry]');
+  r.hidden = !retry; r.onclick = () => { hideError(); retry(); };
+  bar.hidden = false;
+}
+function hideError() { document.getElementById('errorBar').hidden = true; }
+
+const asList = v => (Array.isArray(v) ? v : []);
+async function loadData({ quiet = false } = {}) {
+  store.loading = true;
+  if (!quiet) render();
+  try {
+    if (!ADAPTER) throw new Error('adapter.js did not load');
+    const d = await ADAPTER.load();
+    db = { initiatives: asList(d.initiatives), items: asList(d.items), okrs: asList(d.okrs), results: asList(d.results) };
+    db.items.forEach(i => { if (!Array.isArray(i.links)) i.links = []; if (i.deadline == null) i.deadline = ''; if (i.startDate == null) i.startDate = ''; });
+    db.okrs.forEach(o => { o.baseline = Number(o.baseline); o.target = o.target === null || o.target === undefined || o.target === '' ? null : Number(o.target); });
+    db.results.forEach(r => { r.value = Number(r.value); });
+    store.loaded = true;
+    if (document.getElementById('errorBar').dataset.kind === 'load') hideError();
+  } catch (err) {
+    showError(explain(err, 'load the tracker'), () => loadData(), 'load');
+  } finally {
+    store.loading = false;
+    render();
+    if (okrDetailOpen) scheduleOkrDetail();
+  }
+}
+let renderTimer;
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); }
+
+// Persist changes. Callers have already applied them to `db` so the page updates instantly.
+function commit({ items = [], inits = [], delItems = [], delInits = [], okrs = [], results = [], delOkrs = [], delResults = [] } = {}) {
+  const plain = o => JSON.parse(JSON.stringify(o));
+  const change = {
+    upsert: { initiatives: inits.map(plain), items: items.map(plain), okrs: okrs.map(plain), results: results.map(plain) },
+    remove: { initiatives: [...delInits], items: [...delItems], okrs: [...delOkrs], results: [...delResults] },
+  };
+  // One save at a time keeps quick successive edits in order.
+  store.queue = store.queue.then(() => ADAPTER.save(change)).then(() => true).catch(err => {
+    showError(explain(err, 'save your change') + ' Your last change was not saved; the page now shows what is stored.', null);
+    loadData({ quiet: true });
+    return false;
+  });
+  return store.queue;
+}
+
+function start() {
+  loadUI();
+  loadData();
+  // Changes made elsewhere (another tab, another user): reload quietly.
+  let t;
+  if (ADAPTER && typeof ADAPTER.subscribe === 'function') ADAPTER.subscribe(() => { clearTimeout(t); t = setTimeout(() => loadData({ quiet: true }), 300); });
+}
+
+/* --------------------------------------------------------- derivations */
+// Rebuilt on every render so that parents always reflect their children.
+let IDX;
+function index() {
+  const byId = new Map(db.items.map(i => [i.id, i]));
+  const kids = new Map();
+  for (const i of db.items) {
+    const key = i.parentId && byId.has(i.parentId) ? i.parentId : 'root:' + i.initiativeId;
+    if (!kids.has(key)) kids.set(key, []);
+    kids.get(key).push(i);
+  }
+  for (const list of kids.values()) list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  IDX = { byId, kids, status: new Map(), code: new Map(), deadline: new Map(), initById: new Map(db.initiatives.map(x => [x.id, x])) };
+}
+const childrenOf = id => IDX.kids.get(id) || [];
+const tracksOf = initId => IDX.kids.get('root:' + initId) || [];
+const hasKids = item => childrenOf(item.id).length > 0;
+const initiatives = () => [...db.initiatives].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+// Effective status: a leaf uses its own status; a parent takes the lowest
+// status among its non-Void children. If every child is Void, it is Void.
+function effStatus(item) {
+  if (IDX.status.has(item.id)) return IDX.status.get(item.id);
+  const kids = childrenOf(item.id);
+  let s = item.status;
+  if (kids.length) {
+    const live = kids.map(effStatus).filter(x => x !== 'Void');
+    s = live.length ? live.reduce((a, b) => (RANK[a] <= RANK[b] ? a : b)) : 'Void';
+  }
+  IDX.status.set(item.id, s);
+  return s;
+}
+
+const letters = n => { let s = ''; n += 1; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(97 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+// Numbering follows position: 1, 1a, 1a.1, 1a.1.1 ...
+function codeOf(item) {
+  if (IDX.code.has(item.id)) return IDX.code.get(item.id);
+  const parent = item.parentId && IDX.byId.get(item.parentId);
+  const siblings = parent ? childrenOf(parent.id) : tracksOf(item.initiativeId);
+  const pos = siblings.indexOf(item);
+  let c;
+  if (!parent) c = String(pos + 1);
+  else if (!parent.parentId) c = codeOf(parent) + letters(pos);
+  else c = codeOf(parent) + '.' + (pos + 1);
+  IDX.code.set(item.id, c);
+  return c;
+}
+const depthOf = item => { let d = 0, p = item; while (p.parentId && IDX.byId.get(p.parentId)) { d++; p = IDX.byId.get(p.parentId); } return d; };
+const trackOf = item => { let p = item; while (p.parentId && IDX.byId.get(p.parentId)) p = IDX.byId.get(p.parentId); return p; };
+const ancestors = item => { const out = []; let p = item; while (p.parentId && IDX.byId.get(p.parentId)) { p = IDX.byId.get(p.parentId); out.unshift(p); } return out; };
+function descendants(item) { const out = []; const walk = i => childrenOf(i.id).forEach(c => { out.push(c); walk(c); }); walk(item); return out; }
+function leavesUnder(item) { return hasKids(item) ? descendants(item).filter(d => !hasKids(d)) : [item]; }
+const leavesOfInit = initId => tracksOf(initId).flatMap(leavesUnder);
+const allLeaves = () => initiatives().flatMap(i => leavesOfInit(i.id));
+
+// Parents without their own deadline inherit the earliest open deadline below them.
+function effDeadline(item) {
+  if (IDX.deadline.has(item.id)) return IDX.deadline.get(item.id);
+  let d = { date: item.deadline || '', inherited: false };
+  if (!d.date && hasKids(item)) {
+    const ds = descendants(item).filter(x => x.deadline && !isClosed(effStatus(x))).map(x => x.deadline).sort();
+    if (ds.length) d = { date: ds[0], inherited: true };
+  }
+  IDX.deadline.set(item.id, d);
+  return d;
+}
+
+function todayISO() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function daysUntil(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  return Math.round((new Date(y, m - 1, d) - todayISO()) / 86400000);
+}
+function dueInfo(item) {
+  const s = effStatus(item); const { date, inherited } = effDeadline(item);
+  if (!date) return null;
+  const n = daysUntil(date);
+  const pre = inherited ? 'Next: ' : '';
+  if (isClosed(s)) return { cls: 'done', text: s === 'Void' ? 'Void' : 'Done', n };
+  if (n < 0) return { cls: 'over', text: `${pre}Overdue by ${-n} day${n === -1 ? '' : 's'}`, n };
+  if (n === 0) return { cls: 'soon', text: `${pre}Due today`, n };
+  return { cls: n <= 7 ? 'soon' : 'later', text: `${pre}${n} day${n === 1 ? '' : 's'} left`, n };
+}
+const fmtDate = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+function stats(leaves) {
+  const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
+  leaves.forEach(l => counts[effStatus(l)]++);
+  const live = leaves.length - counts['Void'];
+  const done = counts['Completed'];
+  return { counts, total: leaves.length, live, done, pct: live ? Math.round(done / live * 100) : 0 };
+}
+function lowestStatus(items) {
+  const live = items.map(effStatus).filter(s => s !== 'Void');
+  return live.length ? live.reduce((a, b) => (RANK[a] <= RANK[b] ? a : b)) : (items.length ? 'Void' : null);
+}
+const pathText = item => { const init = IDX.initById.get(item.initiativeId); return [init ? init.name : '', ...ancestors(item).map(a => `${codeOf(a)} ${a.name}`)].filter(Boolean).join(' › '); };
+
+/* ------------------------------------------------------------ mutations */
+function touch(item) { item.updatedAt = new Date().toISOString(); }
+function setStatus(id, status) {
+  const item = IDX.byId.get(id); if (!item) return;
+  if (status === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status;
+  item.status = status; touch(item); commit({ items: [item] }); render();
+}
+function setDeadline(id, date) { const item = IDX.byId.get(id); if (!item) return; item.deadline = date; touch(item); commit({ items: [item] }); render(); }
+function toggleDone(id, checked) {
+  const item = IDX.byId.get(id); if (!item) return;
+  if (checked) setStatus(id, 'Completed');
+  else setStatus(id, item.prevStatus && item.prevStatus !== 'Completed' ? item.prevStatus : 'User Testing');
+}
+function deleteItem(id) {
+  const item = IDX.byId.get(id); if (!item) return;
+  const gone = new Set([id, ...descendants(item).map(d => d.id)]);
+  db.items = db.items.filter(i => !gone.has(i.id));
+  if (ui.track && gone.has(ui.track)) ui.track = 'all';
+  commit({ delItems: [...gone] }); render();
+}
+function moveItem(id, dir) {
+  const item = IDX.byId.get(id); if (!item) return;
+  const sibs = item.parentId ? childrenOf(item.parentId) : tracksOf(item.initiativeId);
+  const i = sibs.indexOf(item), j = i + dir;
+  if (j < 0 || j >= sibs.length) return;
+  [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
+  sibs.forEach((s, k) => s.order = k);
+  commit({ items: sibs }); render();
+}
+function unlinkItem(id, initId) {
+  const item = IDX.byId.get(id); if (!item) return;
+  item.links = (item.links || []).filter(l => l !== initId);
+  touch(item); commit({ items: [item] }); render();
+  toast(`Unlinked ${codeOf(item)} ${item.name}.`);
+}
+function nextOrder(initId, parentId) { const sibs = parentId ? childrenOf(parentId) : tracksOf(initId); return sibs.length ? Math.max(...sibs.map(s => s.order ?? 0)) + 1 : 0; }
+
+/* -------------------------------------------------------------- render */
+const statusPill = s => { const m = STATUS_META[s] || STATUS_META.Thoughts; return `<span class="pill" style="background:${m.bg};color:${m.ink}"><span class="dot" style="background:${m.color}"></span>${esc(s)}</span>`; };
+function statusSelect(item) {
+  const s = effStatus(item), m = STATUS_META[s];
+  const derived = hasKids(item);
+  return `<select class="status" data-act="status" data-id="${item.id}" style="background:${m.bg};color:${m.ink}" ${derived ? 'disabled title="Rolled up from sub-items — change a sub-item to update"' : !canEdit() ? 'disabled title="View only"' : ''}>
+    ${STATUSES.map(x => `<option ${x === s ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
+}
+const dueChip = item => { const d = dueInfo(item); return d ? `<span class="due ${d.cls}" title="Deadline ${esc(fmtDate(effDeadline(item).date))}">${esc(d.text)}</span>` : ''; };
+
+function render() {
+  const appEl = document.getElementById('app');
+  index();
+  // Only fall back to the overview once data has loaded; before that no initiative exists yet.
+  if (store.loaded && ui.view !== 'overview' && !IDX.initById.has(ui.view)) { ui.view = 'overview'; ui.track = 'all'; }
+  const app = document.getElementById('app');
+  const kept = captureScroll(app);
+  const hadQaFocus = document.activeElement && document.activeElement.id === 'qa-input';
+  const inits = initiatives();
+  const cur = ui.view === 'overview' ? null : IDX.initById.get(ui.view);
+  const title = cur ? `What’s next for ${esc(cur.name)}?` : 'Project AHA — Finance Transformation';
+  const subtitle = cur ? (esc(cur.description) || 'Track the work. Clear testing. Move confidently to release.') : 'Overall progress across all initiatives. Select an initiative to drill into its tracks.';
+
+  app.innerHTML = `
+    <div class="top">
+      <div><h1>${title}</h1><div class="sub">${subtitle}</div>
+        <div class="userbar">
+          <span class="mode-note" style="margin:0"><span class="dot" style="background:var(--s-done)"></span>${esc((ADAPTER && ADAPTER.label) || '')}</span>
+          ${themeButton()}
+        </div></div>
+      <div class="actions">
+        <a class="btn city-link" href="city.html" title="See Project AHA as a 3D smart city: each initiative a plot, each track a building that rises as work is completed">🏙 Smart City</a>
+        <button class="btn" data-act="export-xlsx">Export Excel</button>
+        <button class="btn" data-act="backup">Backup</button>
+        ${canEdit() ? `<button class="btn" data-act="restore">Restore</button>
+        ${cur ? `<button class="btn" data-act="edit-init" data-id="${cur.id}" title="Rename, reorder or delete this initiative">Edit initiative</button>
+                 ${ui.page === 'scorecard' ? (store.hasOkrs ? `<button class="btn primary" data-act="add-okr" data-init="${cur.id}">+ Add OKR</button>` : '') : `<button class="btn primary" data-act="add-item" data-init="${cur.id}">+ Add track</button>`}`
+              : `<button class="btn primary" data-act="add-init">+ Add initiative</button>`}` : ''}
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab ${!cur ? 'active' : ''}" data-act="view" data-view="overview">Project AHA overview</button>
+      ${inits.map(i => `<button class="tab ${cur && cur.id === i.id ? 'active' : ''}" data-act="view" data-view="${i.id}">${esc(i.name)}<span class="n">${leavesOfInit(i.id).length}</span></button>`).join('')}
+      ${canEdit() ? '<button class="tab add" data-act="add-init">+ New initiative</button>' : ''}
+    </nav>
+    ${store.loaded ? `<nav class="page-tabs" aria-label="Section">
+      <button class="${ui.page !== 'scorecard' ? 'on' : ''}" data-act="page" data-page="work">Work</button>
+      <button class="${ui.page === 'scorecard' ? 'on' : ''}" data-act="page" data-page="scorecard">Scorecard${store.hasOkrs ? `<span class="n">${cur ? okrsOf(cur.id).length : db.okrs.length}</span>` : ''}</button>
+    </nav>` : ''}
+    ${!store.loaded ? `<div class="card empty" style="padding:48px">${store.loading ? 'Loading Project AHA…' : 'The tracker could not be loaded. See the message above.'}</div>` : `
+    ${!inits.length ? `<div class="banner info">${canEdit() ? 'No initiatives yet. Use “+ Add initiative” to create the first one (for example ORION), then add its tracks and items.' : 'No initiatives yet. An editor needs to add them.'}</div>` : ''}
+    ${ui.page === 'scorecard' ? renderScorecard(cur) : `${cur ? renderInitiativeHeader(cur) : renderOverview(inits)}
+    ${renderWork(cur)}`}`}
+  `;
+  restoreScroll(app, kept);
+  const rm = app.querySelector('.rm');
+  if (rm && !scrollMemory[rm.dataset.scrollKey]) { rm.scrollLeft = Number(rm.dataset.openX); scrollMemory[rm.dataset.scrollKey] = [rm.scrollLeft, 0]; }
+  if (quickAdd.key && hadQaFocus) focusQuickAdd(false);
+}
+
+// Re-rendering replaces the board, which would reset where the person had scrolled
+// (back to the first column). Remember each scrollable area and put it back.
+// Kept per tab and track, so switching tabs and back returns to the same place.
+const scrollMemory = {};
+function captureScroll(root) {
+  root.querySelectorAll('[data-scroll-key]').forEach(el => { scrollMemory[el.dataset.scrollKey] = [el.scrollLeft, el.scrollTop]; });
+  return { areas: scrollMemory, x: window.scrollX, y: window.scrollY };
+}
+function restoreScroll(root, kept) {
+  root.querySelectorAll('[data-scroll-key]').forEach(el => {
+    const v = kept.areas[el.dataset.scrollKey];
+    if (v) { el.scrollLeft = v[0]; el.scrollTop = v[1]; }
+  });
+  if (window.scrollX !== kept.x || window.scrollY !== kept.y) window.scrollTo(kept.x, kept.y);
+}
+
+function kpiCards(leaves, heroLabel) {
+  const st = stats(leaves);
+  const open = leaves.filter(l => !isClosed(effStatus(l)));
+  const overdue = open.filter(l => { const n = daysUntil(l.deadline); return n !== null && n < 0; }).length;
+  const soon = open.filter(l => { const n = daysUntil(l.deadline); return n !== null && n >= 0 && n <= 7; }).length;
+  const groups = [
+    ['Early stage', ['Thoughts', 'Pending User', 'Planning'], 'Thoughts · Pending user · Planning', 'var(--s-thoughts)'],
+    ['Developing', ['Developing'], 'Build & clarify', STATUS_META.Developing.color],
+    ['Testing', ['IT Testing', 'User Testing'], `IT ${st.counts['IT Testing']} · User ${st.counts['User Testing']}`, STATUS_META['IT Testing'].color],
+    ['Completed', ['Completed'], st.counts.Void ? `${st.counts.Void} void (excluded)` : 'Released', STATUS_META.Completed.color],
+  ];
+  return `<div class="kpis">
+    <div class="card kpi hero"><div class="lbl">${esc(heroLabel)}</div><div class="val">${st.pct}%</div><div class="hint">${st.done} of ${st.live} work items completed</div></div>
+    ${groups.map(([lbl, ss, hint, color]) => `<div class="card kpi"><div class="lbl"><span class="dot" style="background:${color}"></span>${lbl}</div><div class="val">${ss.reduce((a, s) => a + st.counts[s], 0)}</div><div class="hint">${hint}</div></div>`).join('')}
+    <div class="card kpi"><div class="lbl">Deadlines</div><div class="val ${overdue ? 'bad' : ''}">${overdue}</div><div class="hint">overdue · ${soon} due within 7 days</div></div>
+  </div>`;
+}
+
+function distribution(leaves) {
+  const st = stats(leaves);
+  const segs = STATUSES.filter(s => st.counts[s]);
+  return `<div class="card dist">
+    <div class="prog-row"><span>Status of all ${st.total} work items</span></div>
+    <div class="stackbar" role="img" aria-label="Status distribution">
+      ${segs.map(s => `<div style="flex:${st.counts[s]};background:${STATUS_META[s].color}" title="${s}: ${st.counts[s]} (${Math.round(st.counts[s] / st.total * 100)}%)"></div>`).join('')}
+    </div>
+    <div class="legend">${STATUSES.map(s => `<span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s} <b>${st.counts[s]}</b></span>`).join('')}</div>
+  </div>`;
+}
+
+function renderOverview(inits) {
+  const leaves = allLeaves();
+  const open = leaves.filter(l => !isClosed(effStatus(l)) && l.deadline);
+  const upcoming = open.map(l => ({ l, n: daysUntil(l.deadline) })).filter(x => x.n <= 14).sort((a, b) => a.n - b.n).slice(0, 12);
+  return `
+    ${kpiCards(leaves, 'Project AHA progress')}
+    <div class="section-title"><h2>Initiatives</h2><span class="meta">${inits.length} initiative${inits.length === 1 ? '' : 's'} · status shown is the lowest across each track</span></div>
+    <div class="inits">
+      ${inits.map(i => {
+        const tr = tracksOf(i.id); const st = stats(leavesOfInit(i.id)); const low = lowestStatus(tr);
+        return `<div class="card init">
+          <div class="init-head">
+            <div><h3>${esc(i.name)}</h3><div class="desc">${esc(i.description || '')}</div></div>
+            ${low ? statusPill(low) : ''}
+          </div>
+          <div><div class="prog-row"><span>${st.done} of ${st.live} completed</span><b>${st.pct}%</b></div><div class="bar"><div style="width:${st.pct}%"></div></div></div>
+          <div class="tracklist">
+            ${tr.map(t => { const ls = stats(leavesUnder(t)); return `<div class="trackrow"><span class="t"><span class="code">${codeOf(t)}</span>${esc(t.name)}</span><span class="c">${ls.done}/${ls.live}</span>${statusPill(effStatus(t))}</div>`; }).join('') || '<div class="empty">No tracks yet</div>'}
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            ${canEdit() ? `<button class="btn sm ghost" data-act="edit-init" data-id="${i.id}" title="Rename, reorder or delete">Edit</button>` : ''}
+            <button class="btn sm" data-act="view" data-view="${i.id}">Open ${esc(i.name)} →</button>
+          </div>
+        </div>`;
+      }).join('')}
+      ${canEdit() ? '<button class="card init add" data-act="add-init">+ Add new initiative</button>' : ''}
+    </div>
+    <div class="section-title"><h2>Status mix & deadlines</h2><span class="meta">Today: ${fmtDate(stamp())}</span></div>
+    <div class="grid-2">
+      ${distribution(leaves)}
+      <div class="card dl">
+        <div style="padding:6px 18px 8px;font-weight:600">Overdue & due in next 14 days</div>
+        ${upcoming.length ? upcoming.map(({ l }) => `<div class="dl-item" ${canEdit() ? `data-act="edit-item" data-id="${l.id}"` : 'style="cursor:default"'}><div><div class="nm">${esc(l.name)}</div><div class="path">${esc(pathText(l))}</div></div>${dueChip(l)}</div>`).join('')
+          : '<div class="empty">No open items due in the next 14 days. Set deadlines on the cards or in the Edit dialog.</div>'}
+      </div>
+    </div>
+    <div class="section-title"><h2>All work</h2><span class="meta">Every initiative in one list</span></div>`;
+}
+
+function renderInitiativeHeader(init) {
+  const linked = db.items.filter(i => (i.links || []).includes(init.id) && i.initiativeId !== init.id);
+  return `${kpiCards(leavesOfInit(init.id), init.name + ' progress')}
+    ${linked.length ? `<div class="banner info">${linked.length} item${linked.length > 1 ? 's' : ''} from other initiatives ${linked.length > 1 ? 'are' : 'is'} linked here (shown in the last column of the By track board; not counted in this initiative’s progress).</div>` : ''}
+    <div style="height:20px"></div>`;
+}
+
+/* Work panel: sidebar + track board / status board, scoped to one initiative or all. */
+function renderWork(cur) {
+  const sideEntries = cur
+    ? tracksOf(cur.id).map(t => ({ id: t.id, label: `${codeOf(t)}. ${t.name}`, count: leavesUnder(t).length, status: effStatus(t) }))
+    : initiatives().map(i => ({ id: i.id, label: i.name, count: leavesOfInit(i.id).length, status: lowestStatus(tracksOf(i.id)) }));
+  if (ui.track !== 'all' && !sideEntries.some(e => e.id === ui.track)) ui.track = 'all';
+  const scopeLeaves = cur ? leavesOfInit(cur.id) : allLeaves();
+  const st = stats(scopeLeaves);
+  const sel = sideEntries.find(e => e.id === ui.track);
+
+  return `<div class="work">
+    <aside class="card side">
+      <h4>${cur ? 'TRACKS' : 'INITIATIVES'}</h4>
+      <button class="side-item ${ui.track === 'all' ? 'active' : ''}" data-act="track" data-id="all"><span class="lbl">All ${cur ? 'tracks' : 'initiatives'}</span><span class="n">${scopeLeaves.length}</span></button>
+      ${sideEntries.map(e => `<button class="side-item ${ui.track === e.id ? 'active' : ''}" data-act="track" data-id="${e.id}" title="${esc(e.label)} — ${esc(e.status || '')}">
+        <span class="dot" style="background:${e.status ? STATUS_META[e.status].color : 'var(--border-strong)'}"></span><span class="lbl">${esc(e.label)}</span><span class="n">${e.count}</span></button>`).join('')}
+      ${cur && canEdit() ? `<button class="side-item" style="color:var(--primary)" data-act="add-item" data-init="${cur.id}">+ Add track</button>` : ''}
+      <div class="foot">
+        <div style="font-weight:700;letter-spacing:.1em;font-size:11px">COMPLETION</div>
+        <div class="big">${st.pct}%</div>
+        <div class="bar"><div style="width:${st.pct}%"></div></div>
+        <p style="margin:10px 0 0">A track or parent item shows the <b>lowest</b> status of its sub-items. Void items are excluded. Ticking a box marks the item Completed.</p>
+      </div>
+    </aside>
+    <section>
+      <div class="toolbar">
+        <input type="search" placeholder="Search items, notes or owners…" value="${esc(ui.search)}" data-act="search">
+        <select data-act="filter-status"><option value="all">All statuses</option>${STATUSES.map(s => `<option ${ui.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        <label class="chk"><input type="checkbox" data-act="hide-done" ${ui.hideDone ? 'checked' : ''}> Hide completed / void</label>
+        <label class="chk"><input type="checkbox" data-act="overdue-only" ${ui.overdueOnly ? 'checked' : ''}> Overdue only</label>
+        <div class="seg" role="tablist" aria-label="Board view"><button class="${ui.mode === 'tracks' ? 'on' : ''}" data-act="mode" data-mode="tracks" title="${cur ? 'One column per track' : 'One column per initiative'}">${cur ? 'By track' : 'By initiative'}</button><button class="${ui.mode === 'status' ? 'on' : ''}" data-act="mode" data-mode="status" title="One column per status">By status</button><button class="${ui.mode === 'roadmap' ? 'on' : ''}" data-act="mode" data-mode="roadmap" title="Timeline of start dates and deadlines">Roadmap</button></div>
+      </div>
+      <div class="work-head"><h3>${sel ? esc(sel.label) : (cur ? 'All tracks' : 'All initiatives')}</h3><span class="meta" id="countMeta"></span></div>
+      ${ui.mode === 'status' ? renderBoard(cur) : ui.mode === 'roadmap' ? renderRoadmap(cur) : renderTrackBoard(cur)}
+    </section>
+  </div>`;
+}
+
+function matches(item) {
+  const s = effStatus(item);
+  if (ui.status !== 'all' && s !== ui.status) return false;
+  if (ui.hideDone && isClosed(s)) return false;
+  if (ui.overdueOnly) { const d = dueInfo(item); if (!d || d.cls !== 'over') return false; }
+  if (ui.search) {
+    const q = ui.search.toLowerCase();
+    const hay = [item.name, item.notes, item.owner, codeOf(item), ...ancestors(item).map(a => a.name)].join(' ').toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+// A node shows if it matches or any descendant matches.
+function visible(item, memo) {
+  if (memo.has(item.id)) return memo.get(item.id);
+  const v = matches(item) || childrenOf(item.id).some(c => visible(c, memo));
+  memo.set(item.id, v); return v;
+}
+const filtersActive = () => ui.search || ui.status !== 'all' || ui.hideDone || ui.overdueOnly;
+
+function rootsInScope(cur) {
+  if (cur) return tracksOf(cur.id).filter(t => ui.track === 'all' || t.id === ui.track);
+  return initiatives().filter(i => ui.track === 'all' || i.id === ui.track).flatMap(i => tracksOf(i.id));
+}
+
+// Items from other initiatives linked into `cur`. If an item and one of its
+// ancestors are both linked, only the ancestor is listed (its subtree covers it).
+function linkedRoots(cur) {
+  const linkedHere = i => (i.links || []).includes(cur.id) && i.initiativeId !== cur.id;
+  return db.items.filter(i => linkedHere(i) && !ancestors(i).some(linkedHere))
+    .sort((a, b) => (a.initiativeId + codeOf(a)).localeCompare(b.initiativeId + codeOf(b), undefined, { numeric: true }));
+}
+// The linked item (itself or an ancestor) that brings `item` into initiative `initId`, if any.
+function linkSource(item, initId) {
+  if (item.initiativeId === initId) return null;
+  return [item, ...ancestors(item).reverse()].find(x => (x.links || []).includes(initId)) || null;
+}
+
+/* Track board ("By track" / "By initiative"): columns are tracks (or initiatives on
+   the overview); each card is one item with its own sub-items listed inside it, so a
+   long list becomes several short columns instead of one long page. */
+function renderTrackBoard(cur) {
+  const memo = new Map();
+  let cardCount = 0;
+  const show = i => visible(i, memo);
+  const cardsFor = (list, opts) => list.filter(show).map(i => { cardCount++; return itemCard(i, opts, show); }).join('');
+  let cols = '';
+  if (cur) {
+    cols = rootsInScope(cur).filter(show).map(t => trackColumn(t, cardsFor(childrenOf(t.id), {}))).join('');
+    if (ui.track === 'all' && canEdit()) cols += `<section class="tcol tcol-add" aria-label="Add a track">${quickAddHTML(cur.id, null)}</section>`;
+    if (ui.track === 'all') {
+      const linked = linkedRoots(cur).filter(show);
+      if (linked.length) cols += `<section class="tcol" aria-label="Linked from other initiatives">
+        <div class="tcol-head linkcol"><div class="group-label">Linked from other initiatives</div>
+          <div class="meta-line">Shown here, counted in their own initiative.</div></div>
+        <div class="tcol-body" data-scroll-key="col-linked">${cardsFor(linked, { linkedInto: cur })}</div></section>`;
+    }
+  } else {
+    cols = initiatives().filter(i => ui.track === 'all' || i.id === ui.track)
+      .map(i => initiativeColumn(i, cardsFor(tracksOf(i.id), { trackCard: true }))).join('');
+  }
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cardCount} card${cardCount === 1 ? '' : 's'} · scroll sideways for more columns`; });
+  if (!cols) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : cur ? 'No tracks yet.' : 'No initiatives yet.'}</div>`;
+  return `<div class="tboard" data-scroll-key="track-board:${ui.view}:${ui.track}">${cols}</div>`;
+}
+
+/* Quick add: a "+ Add 1d" / "+ Add Track 7" button at the foot of a column that
+   opens a one-line name box. Enter creates the item with the next code and keeps
+   the box open for the next one; Esc or Cancel closes it. */
+const quickAdd = { key: null, value: '', busy: false };
+const qaKey = (initId, parentId) => parentId || 'tracks:' + initId;
+function nextCodeLabel(initId, parentId) {
+  if (!parentId) return 'Track ' + (tracksOf(initId).length + 1);
+  const parent = IDX.byId.get(parentId), n = childrenOf(parentId).length;
+  return parent.parentId ? `${codeOf(parent)}.${n + 1}` : codeOf(parent) + letters(n);
+}
+function quickAddHTML(initId, parentId) {
+  const key = qaKey(initId, parentId), next = nextCodeLabel(initId, parentId);
+  const where = parentId ? `under ${codeOf(IDX.byId.get(parentId))}` : `to ${IDX.initById.get(initId)?.name || ''}`;
+  if (quickAdd.key !== key) return `<div class="qa"><button class="qa-btn" data-act="qa-open" data-key="${key}" title="Add ${esc(next)} ${esc(where)}">+ Add ${esc(next)}</button></div>`;
+  return `<form class="qa qa-form" data-qa-form data-init="${initId}" data-parent="${parentId || ''}" autocomplete="off">
+    <label for="qa-input">New ${parentId ? 'item' : 'track'} <span class="code">${esc(next)}</span></label>
+    <input id="qa-input" data-qa-input type="text" placeholder="${parentId ? 'Item name' : 'Track name'}" value="${esc(quickAdd.value)}" ${quickAdd.busy ? 'disabled' : ''}>
+    <div class="ctrls"><button class="btn sm primary" type="submit">Add ${esc(next)}</button><button class="btn sm" type="button" data-act="qa-close">Cancel</button>
+      <span class="help">Starts as Thoughts · Enter adds, Esc closes</span></div>
+  </form>`;
+}
+function openQuickAdd(key) { quickAdd.key = key; quickAdd.value = ''; render(); focusQuickAdd(true); }
+function closeQuickAdd() { if (!quickAdd.key) return; quickAdd.key = null; quickAdd.value = ''; render(); }
+function focusQuickAdd(reveal) {
+  const input = document.getElementById('qa-input'); if (!input) return;
+  input.focus({ preventScroll: !reveal });
+  input.setSelectionRange(input.value.length, input.value.length);
+  if (reveal) input.closest('.qa-form').scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+async function submitQuickAdd(form) {
+  const name = quickAdd.value.trim();
+  if (!name) { closeQuickAdd(); return; }
+  const initId = form.dataset.init, parentId = form.dataset.parent || null;
+  const code = nextCodeLabel(initId, parentId);
+  const now = new Date().toISOString();
+  const created = { id: uid(), initiativeId: initId, parentId, name, status: 'Thoughts', deadline: '', owner: '', notes: '', links: [], order: nextOrder(initId, parentId), createdAt: now, updatedAt: now };
+  db.items.push(created);
+  if (parentId) ui.collapsed = ui.collapsed.filter(c => c !== parentId);
+  quickAdd.value = '';
+  commit({ items: [created] });
+  render();
+  focusQuickAdd(true); // ready for the next one
+  toast(`Added ${code} ${name}${filtersActive() && !matches(IDX.byId.get(created.id) || created) ? ' (hidden by the current filters)' : ''}.`);
+}
+
+/* Roadmap. Each item is drawn from its start date to its deadline. A parent spans
+   the earliest start to the latest deadline among itself and its sub-items. With a
+   deadline only it is a milestone (diamond); with no dates it is listed as not
+   scheduled, so nothing disappears from view. */
+const DAY = 86400000;
+const isoDays = iso => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d) / DAY; };
+const daysIso = n => new Date(n * DAY).toISOString().slice(0, 10);
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtShort = iso => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${MONTHS[m - 1]}`; };
+
+function spanOf(item) { return spanOfAll([item, ...descendants(item)]); }
+function spanOfAll(all) {
+  const starts = all.map(x => x.startDate).filter(Boolean).sort();
+  const ends = all.map(x => x.deadline).filter(Boolean).sort();
+  const start = starts[0] || '', end = ends[ends.length - 1] || '';
+  if (start && end) return start <= end ? { kind: 'bar', start, end } : { kind: 'bar', start: end, end: start };
+  if (end) return { kind: 'milestone', end };
+  if (start) return { kind: 'start', start };
+  return { kind: 'none' };
+}
+
+function renderRoadmap(cur) {
+  const memo = new Map();
+  const show = i => visible(i, memo);
+  const lanes = [];
+  if (cur) {
+    rootsInScope(cur).filter(show).forEach(t => lanes.push({ key: t.id, item: t, title: `Track ${codeOf(t)} ${t.name}`, rows: childrenOf(t.id).filter(show) }));
+    if (ui.track === 'all') {
+      const linked = linkedRoots(cur).filter(show);
+      if (linked.length) lanes.push({ key: 'linked:' + cur.id, title: 'Linked from other initiatives', rows: linked, linked: true });
+    }
+  } else {
+    initiatives().filter(i => ui.track === 'all' || i.id === ui.track).forEach(i => {
+      const rows = tracksOf(i.id).filter(show);
+      if (rows.length || !filtersActive()) lanes.push({ key: i.id, init: i, title: i.name, rows });
+    });
+  }
+  if (!lanes.length) return `<div class="card empty">${filtersActive() ? 'No items match the filters.' : 'No tracks yet.'}</div>`;
+  if (ui.rmZoom === 'quarters') return renderQuarterBoard(cur, lanes);
+  // Time range: every date in view plus today, padded to whole months, at least 6 months.
+  const today = isoDays(stamp());
+  const dates = [today];
+  lanes.forEach(l => [l.item, ...l.rows].filter(Boolean).forEach(r => { const sp = spanOf(r); if (sp.start) dates.push(isoDays(sp.start)); if (sp.end) dates.push(isoDays(sp.end)); }));
+  const first = new Date(Math.min(...dates) * DAY), last = new Date(Math.max(...dates) * DAY);
+  let y0 = first.getUTCFullYear(), m0 = first.getUTCMonth() - 1; if (m0 < 0) { m0 += 12; y0--; }
+  let y1 = last.getUTCFullYear(), m1 = last.getUTCMonth() + 2;
+  while ((y1 - y0) * 12 + (m1 - m0) < 6) m1++;
+  const from = Date.UTC(y0, m0, 1) / DAY, to = Date.UTC(y1, m1, 1) / DAY;
+  const pxDay = ui.rmZoom === 'quarters' ? 1.4 : 3.6;
+  const W = Math.round((to - from) * pxDay), LABEL = 280;
+  const x = d => Math.round((d - from) * pxDay);
+  // Header and grid lines
+  let head = '', lines = '';
+  for (let y = y0, m = m0; Date.UTC(y, m, 1) / DAY < to; m++) {
+    if (m > 11) { m = 0; y++; }
+    const d = Date.UTC(y, m, 1) / DAY, nx = Date.UTC(y, m + 1, 1) / DAY;
+    const q = m % 3 === 0;
+    if (q || d === from) head += `<div class="rm-q" style="left:${x(d)}px">Q${Math.floor(m / 3) + 1} ${y}</div>`;
+    head += `<div class="rm-m" style="left:${x(d)}px;width:${x(nx) - x(d)}px">${ui.rmZoom === 'quarters' ? MONTHS[m].slice(0, 1) : MONTHS[m]}</div>`;
+    lines += `<div class="rm-gl ${q ? 'q' : ''}" style="left:${x(d)}px"></div>`;
+  }
+  const todayX = x(today);
+  lines += `<div class="rm-today" style="left:${todayX}px"><span>Today</span></div>`;
+
+  let scheduled = 0, total = 0;
+  const mark = (item, opts = {}) => {
+    const s = effStatus(item), sp = spanOf(item), meta = STATUS_META[s];
+    const late = !isClosed(s) && sp.end && isoDays(sp.end) < today;
+    const tip = `${codeOf(item)} ${item.name}\n${s}${sp.start ? `\nStart ${fmtDate(sp.start)}` : ''}${sp.end ? `\nDeadline ${fmtDate(sp.end)}` : ''}${late ? `\nOverdue by ${today - isoDays(sp.end)} days` : ''}${hasKids(item) ? '\nSpan covers its sub-items' : ''}`;
+    const tag = canEdit() ? 'button' : 'div';
+    const act = canEdit() ? `data-act="edit-item" data-id="${item.id}" type="button"` : '';
+    const vars = `--b-c:${meta.color};--b-bg:${meta.bg}`;
+    if (sp.kind === 'none') {
+      if (!ui.rmUnscheduled && !opts.summary) return '';
+      return opts.summary ? '' : `<${tag} class="rm-none" ${act} style="left:${Math.max(4, todayX + 8)}px" title="${esc(tip)}">Not scheduled${canEdit() ? ' · add dates' : ''}</${tag}>`;
+    }
+    if (!opts.summary) scheduled++;
+    if (sp.kind === 'bar') {
+      const l = x(isoDays(sp.start)), w = Math.max(8, x(isoDays(sp.end) + 1) - l);
+      if (opts.summary) return `<div class="rm-bar thin" style="${vars};left:${l}px;width:${w}px" title="${esc(tip)}"></div>`;
+      const txt = w > 120 ? `${fmtShort(sp.start)} – ${fmtShort(sp.end)}` : '';
+      return `<${tag} class="rm-bar ${late ? 'late' : ''} ${isClosed(s) ? 'closed' : ''}" ${act} style="${vars};left:${l}px;width:${w}px" title="${esc(tip)}" aria-label="${esc(tip.replace(/\n/g, ', '))}">${txt}</${tag}>`;
+    }
+    const at = sp.kind === 'milestone' ? sp.end : sp.start;
+    const px = x(isoDays(at) + (sp.kind === 'milestone' ? 0.5 : 0));
+    if (opts.summary) return `<div class="rm-ms" style="--b-c:${meta.color};left:${px}px;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;opacity:.6" title="${esc(tip)}"></div>`;
+    return `<${tag} class="rm-ms ${late ? 'late' : ''}" ${act} style="--b-c:${meta.color};left:${px}px" title="${esc(tip)}" aria-label="${esc(tip.replace(/\n/g, ', '))}"></${tag}>
+      <div class="rm-ms-label" style="left:${px}px">${sp.kind === 'milestone' ? 'Due' : 'Starts'} ${fmtShort(at)}${late ? ' · overdue' : ''}</div>`;
+  };
+  // Lane header: one thin bar for the whole track / initiative, coloured by its lowest status.
+  const laneBar = (all, low) => {
+    const sp = spanOfAll(all); if (sp.kind === 'none' || !low) return '';
+    const c = STATUS_META[low].color, a = isoDays(sp.start || sp.end), b = isoDays(sp.end || sp.start);
+    return `<div class="rm-bar thin" style="--b-c:${c};left:${x(a)}px;width:${Math.max(8, x(b + 1) - x(a))}px" title="${esc(`${sp.start ? fmtDate(sp.start) : ''}${sp.start && sp.end ? ' – ' : ''}${sp.end ? fmtDate(sp.end) : ''}`)}"></div>`;
+  };
+  // Where the timeline opens: today, or earlier when in-progress work started before it.
+  let firstOpenStart = today;
+  lanes.forEach(l => l.rows.forEach(r => { const sp = spanOf(r); if (sp.start && sp.end && isoDays(sp.end) >= today - 31) firstOpenStart = Math.min(firstOpenStart, isoDays(sp.start)); }));
+  const openX = Math.max(0, Math.min(todayX - 60, x(Math.max(firstOpenStart, today - 120)) - 24));
+  const rowHTML = (item, depthPad) => {
+    total++;
+    const s = effStatus(item);
+    if (spanOf(item).kind === 'none' && !ui.rmUnscheduled) return '';
+    return `<div class="rm-row">
+      <div class="rm-label" style="padding-left:${10 + depthPad}px" title="${esc(codeOf(item) + ' ' + item.name)}">
+        <span class="dot" style="background:${STATUS_META[s].color}" aria-hidden="true"></span>
+        <span class="txt"><span class="code">${!cur && !item.parentId ? 'Track ' : ''}${codeOf(item)}</span>${esc(item.name)}</span>
+      </div>
+      <div class="rm-time" style="width:${W}px">${mark(item)}</div>
+    </div>`;
+  };
+  let body = '';
+  lanes.forEach(l => {
+    const collapsed = ui.rmCollapsed.includes(l.key);
+    const laneItems = l.item ? [l.item] : l.rows;
+    const st = stats(laneItems.flatMap(leavesUnder));
+    const low = l.item ? effStatus(l.item) : lowestStatus(l.rows);
+    const titleHTML = l.init
+      ? `<a href="#" data-act="view" data-view="${l.init.id}" style="color:inherit">${esc(l.title)}</a>`
+      : esc(l.title);
+    body += `<div class="rm-row rm-lane">
+      <div class="rm-label">
+        <button class="toggle" data-act="rm-lane" data-key="${l.key}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${esc(l.title)}">${collapsed ? '▶' : '▼'}</button>
+        ${low ? `<span class="dot" style="background:${STATUS_META[low].color}" title="${esc(low)}"></span>` : ''}
+        <span class="txt" title="${esc(l.title)}">${titleHTML}</span>
+        ${l.linked ? '' : `<span class="pct">${st.pct}%</span>`}
+      </div>
+      <div class="rm-time" style="width:${W}px">${laneBar(l.item ? [l.item, ...descendants(l.item)] : l.rows.flatMap(r => [r, ...descendants(r)]), low)}</div>
+    </div>`;
+    if (!collapsed) {
+      if (l.item && !l.rows.length && spanOf(l.item).kind !== 'none') body += rowHTML(l.item, 18);
+      body += l.rows.map(r => rowHTML(r, 18)).join('');
+    }
+  });
+  const anyDates = scheduled > 0;
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${scheduled} of ${total} item${total === 1 ? '' : 's'} on the timeline`; });
+  const setupNote = !store.hasStartDate
+    ? `<div class="banner">Roadmap bars need a start date. Until it is added, items with a deadline show as milestones. To turn on start dates, add this column to the database:
+        <code style="display:block;margin-top:6px;white-space:pre-wrap;font-family:var(--mono);font-size:12px">alter table public.work_items add column if not exists start_date date;</code></div>` : '';
+  const hint = !anyDates && lanes.length ? `<div class="banner info">Nothing has dates yet. ${canEdit() ? 'Click “Not scheduled · add dates” on any row (or Edit a card) and set a start date and deadline to place it on the roadmap.' : 'Editors can add start dates and deadlines to place items on the roadmap.'}</div>` : '';
+  return `${setupNote}${hint}
+    <div class="rm-tools">
+      ${rmViewSeg()}
+      <button class="btn sm" data-act="rm-today">Jump to today</button>
+      <label class="chk" style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)"><input type="checkbox" data-act="rm-unscheduled" ${ui.rmUnscheduled ? 'checked' : ''}> Show items without dates</label>
+      <div class="rm-legend" aria-label="Legend">
+        <span><span class="rm-key-bar"></span>Start → deadline</span>
+        <span><span class="rm-key-ms"></span>Deadline only</span>
+        <span><span class="rm-key-today"></span>Today</span>
+        <span><span class="rm-key-bar" style="box-shadow:0 0 0 2px var(--danger)"></span>Overdue</span>
+        ${STATUSES.filter(st => st !== 'Void').map(st => `<span><span class="dot" style="background:${STATUS_META[st].color}"></span>${st}</span>`).join('')}
+      </div>
+    </div>
+    <div class="rm" data-scroll-key="roadmap:${ui.view}:${ui.track}:${ui.rmZoom}" data-today-x="${todayX}" data-open-x="${openX}">
+      <div class="rm-grid" style="--rm-label:${LABEL}px;width:calc(var(--rm-label) + ${W}px)">
+        <div class="rm-row rm-head"><div class="rm-label">${cur ? 'Track / item' : 'Initiative / track'}</div><div class="rm-time" style="width:${W}px">${head}</div></div>
+        <div style="position:relative">
+          <div class="rm-overlay" style="left:var(--rm-label);width:${W}px">${lines}</div>
+          ${body}
+        </div>
+      </div>
+    </div>`;
+}
+const rmViewSeg = () => `<div class="seg" aria-label="Roadmap view"><button class="${ui.rmZoom !== 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="months" title="Bars on a month-by-month timeline">Timeline</button><button class="${ui.rmZoom === 'quarters' ? 'on' : ''}" data-act="rm-zoom" data-zoom="quarters" title="What is due this quarter and next">Next 2 quarters</button></div>`;
+
+/* "Next 2 quarters": a plain board of what is due this quarter and next, plus an
+   Overdue column when anything is late. Each item goes in the quarter of its
+   deadline (or of its start date if it has no deadline), grouped by track. */
+function renderQuarterBoard(cur, lanes) {
+  const t = new Date(), y = t.getFullYear(), q = Math.floor(t.getMonth() / 3);
+  const qStart = (yy, qq) => { yy += Math.floor(qq / 4); qq = ((qq % 4) + 4) % 4; return { y: yy, q: qq, from: `${yy}-${String(qq * 3 + 1).padStart(2, '0')}-01` }; };
+  const Q0 = qStart(y, q), Q1 = qStart(y, q + 1), Q2 = qStart(y, q + 2);
+  const todayIso = stamp();
+  const qLabel = Q => `Q${Q.q + 1} ${Q.y}`;
+  const qRange = (Q, N) => { const [a, b] = [Q.from, N.from].map(v => v.split('-').map(Number)); const end = new Date(b[0], b[1] - 1, 0); return `${MONTHS[a[1] - 1]} – ${MONTHS[end.getMonth()]} ${end.getFullYear()}`; };
+  const cols = { overdue: [], now: [], next: [] };
+  let later = 0, undated = 0, done = 0;
+  lanes.forEach(l => {
+    const rows = l.rows.length ? l.rows : (l.item ? [l.item] : []);
+    rows.forEach(r => {
+      const s = effStatus(r), sp = spanOf(r);
+      const key = sp.end || sp.start;
+      if (isClosed(s)) { if (key && key >= Q0.from && key < Q2.from) done++; return; }
+      if (!key) { undated++; return; }
+      const entry = { item: r, lane: l, sp, key };
+      if (sp.end && sp.end < todayIso) cols.overdue.push(entry);
+      else if (key < Q1.from) cols.now.push(entry);
+      else if (key < Q2.from) cols.next.push(entry);
+      else later++;
+    });
+  });
+  const card = e => {
+    const r = e.item, s = effStatus(r), sp = e.sp, meta = STATUS_META[s];
+    const d = sp.end ? daysUntil(sp.end) : null;
+    const due = sp.end
+      ? `<span class="due ${d < 0 ? 'over' : d <= 7 ? 'soon' : 'later'}">${d < 0 ? `Overdue ${-d}d` : d === 0 ? 'Due today' : `Due ${fmtShort(sp.end)} · ${d}d`}</span>`
+      : `<span class="due later">Starts ${fmtShort(sp.start)}</span>`;
+    const started = sp.start && sp.end && sp.start <= todayIso ? `<span class="tag derived">Started ${fmtShort(sp.start)}</span>` : '';
+    const tag = canEdit() ? 'button' : 'div';
+    return `<${tag} class="icard qcard" ${canEdit() ? `type="button" data-act="edit-item" data-id="${r.id}"` : ''} style="--sc:${meta.color}" title="${esc(pathText(r))}">
+      <div class="ihead"><div class="name"><span class="code">${!cur && !r.parentId ? 'Track ' : ''}${codeOf(r)}</span>${esc(r.name)}</div></div>
+      <div class="ctrls">${statusPill(s)}${due}${started}</div>
+      ${r.owner ? `<div class="meta-line">👤 ${esc(r.owner)}</div>` : ''}
+    </${tag}>`;
+  };
+  const colHTML = (title, sub, list, color, emptyText) => {
+    list.sort((a, b) => a.key.localeCompare(b.key));
+    // group by lane (track, or initiative on the overview) in lane order
+    const groups = lanes.map(l => ({ l, items: list.filter(e => e.lane === l) })).filter(g => g.items.length);
+    return `<section class="tcol qcol" aria-label="${esc(title)}">
+      <div class="tcol-head" style="--tc:${color}">
+        <div class="ihead"><div class="t name">${esc(title)}</div><span class="pct" style="font-weight:700">${list.length}</span></div>
+        <div class="meta-line">${esc(sub)}</div>
+      </div>
+      <div class="tcol-body" data-scroll-key="q-${title}">${groups.length ? groups.map(g => `<div class="qgroup"><div class="group-label">${esc(g.l.title)}</div>${g.items.map(card).join('')}</div>`).join('') : `<div class="tcol-empty">${emptyText}</div>`}</div>
+    </section>`;
+  };
+  const total = cols.overdue.length + cols.now.length + cols.next.length;
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${total} open item${total === 1 ? '' : 's'} due by the end of ${qLabel(Q1)}`; });
+  const notes = [
+    done ? `${done} completed this period` : '',
+    later ? `${later} due after ${qLabel(Q1)}` : '',
+    undated ? `${undated} without dates` : '',
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="rm-tools">
+      ${rmViewSeg()}
+      <span class="meta-line" style="margin:0">Open items, placed by deadline${notes ? ` · ${notes} (see Timeline)` : ''}</span>
+    </div>
+    <div class="tboard qboard" data-scroll-key="quarters:${ui.view}:${ui.track}">
+      ${cols.overdue.length ? colHTML('Overdue', 'Past their deadline and not completed', cols.overdue, 'var(--danger)', '') : ''}
+      ${colHTML(`This quarter · ${qLabel(Q0)}`, qRange(Q0, Q1), cols.now, 'var(--primary)', 'Nothing due this quarter.')}
+      ${colHTML(`Next quarter · ${qLabel(Q1)}`, qRange(Q1, Q2), cols.next, 'var(--s-ut)', 'Nothing due next quarter yet.')}
+    </div>`;
+}
+
+function scrollRoadmapToToday(el) {
+  el = el || document.querySelector('.rm');
+  if (el) el.scrollLeft = Math.max(0, Number(el.dataset.todayX) - 60);
+}
+
+function progressLine(item) {
+  const st = stats(leavesUnder(item));
+  return `<div class="meta-line" style="justify-content:space-between"><span>${st.done}/${st.live} done</span><b style="color:var(--ink)">${st.pct}%</b></div>
+    <div class="mini-bar" aria-hidden="true"><div style="width:${st.pct}%"></div></div>`;
+}
+
+function trackColumn(t, cardsHTML) {
+  const s = effStatus(t), kids = hasKids(t);
+  return `<section class="tcol" aria-label="Track ${esc(codeOf(t))} ${esc(t.name)}">
+    <div class="tcol-head ${isClosed(s) ? 'done' : ''}" style="--tc:${STATUS_META[s].color}">
+      <div class="ihead">
+        <input type="checkbox" class="cb" data-act="done" data-id="${t.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'} aria-label="Mark track completed">
+        <div class="t name"><span class="code">Track ${codeOf(t)}</span>${esc(t.name)}</div>
+      </div>
+      ${itemMeta(t)}
+      ${kids ? progressLine(t) : ''}
+      <div class="ctrls">${statusSelect(t)}${dueChip(t)}</div>
+      ${canEdit() ? `<div class="ctrls">${dateInput(t)}<span class="grow"></span>
+        <button class="btn sm ghost" data-act="add-item" data-init="${t.initiativeId}" data-parent="${t.id}" title="Add a sub-item to this track">+ Sub</button>
+        <button class="btn sm" data-act="edit-item" data-id="${t.id}">Edit</button></div>` : ''}
+    </div>
+    <div class="tcol-body" data-scroll-key="col-${t.id}">${cardsHTML || (kids ? '<div class="tcol-empty">No sub-items match the filters.</div>' : canEdit() ? '' : '<div class="tcol-empty">No sub-items yet.</div>')}</div>
+    ${canEdit() ? quickAddHTML(t.initiativeId, t.id) : ''}
+  </section>`;
+}
+
+function initiativeColumn(init, cardsHTML) {
+  const tracks = tracksOf(init.id), low = lowestStatus(tracks);
+  const st = stats(leavesOfInit(init.id));
+  return `<section class="tcol" aria-label="${esc(init.name)}">
+    <div class="tcol-head" style="--tc:${low ? STATUS_META[low].color : 'var(--border-strong)'}">
+      <div class="ihead"><div class="t name"><a href="#" data-act="view" data-view="${init.id}" title="Open ${esc(init.name)}">${esc(init.name)}</a></div>${low ? statusPill(low) : ''}</div>
+      ${init.description ? `<div class="meta-line">${esc(init.description)}</div>` : ''}
+      <div class="meta-line" style="justify-content:space-between"><span>${st.done}/${st.live} work items done · ${tracks.length} track${tracks.length === 1 ? '' : 's'}</span><b style="color:var(--ink)">${st.pct}%</b></div>
+      <div class="mini-bar" aria-hidden="true"><div style="width:${st.pct}%"></div></div>
+      ${canEdit() ? `<div class="ctrls"><span class="grow"></span><button class="btn sm ghost" data-act="add-item" data-init="${init.id}">+ Track</button><button class="btn sm" data-act="edit-init" data-id="${init.id}">Edit</button></div>` : ''}
+    </div>
+    <div class="tcol-body" data-scroll-key="col-${init.id}">${cardsHTML || (tracks.length ? '<div class="tcol-empty">No tracks match the filters.</div>' : canEdit() ? '' : '<div class="tcol-empty">No tracks yet.</div>')}</div>
+    ${canEdit() ? quickAddHTML(init.id, null) : ''}
+  </section>`;
+}
+
+const dateInput = item => `<input type="date" class="dl-input" value="${esc(item.deadline || '')}" data-act="deadline" data-id="${item.id}" title="Deadline" aria-label="Deadline for ${esc(item.name)}" ${canEdit() ? '' : 'disabled'}>`;
+
+function itemMeta(item, opts = {}) {
+  const kids = hasKids(item);
+  const ls = kids && !opts.noRollup ? stats(leavesUnder(item)) : null;
+  const linkTags = (item.links || []).map(l => IDX.initById.get(l)).filter(Boolean).filter(l => l.id !== item.initiativeId)
+    .map(l => `<span class="tag link" title="Linked initiative">↔ ${esc(l.name)}</span>`).join('');
+  const bits = [
+    opts.path ? `<span>${esc(opts.path)}</span>` : '',
+    opts.fromTag || '',
+    ls ? `<span class="tag derived" title="Status rolled up from sub-items">${ls.done}/${ls.live} sub-items done</span>` : '',
+    item.owner ? `<span>👤 ${esc(item.owner)}</span>` : '',
+    linkTags,
+    item.notes ? `<span title="${esc(item.notes)}">📝 ${esc(item.notes.length > 60 ? item.notes.slice(0, 60) + '…' : item.notes)}</span>` : '',
+  ].filter(Boolean).join('');
+  return bits ? `<div class="meta-line">${bits}</div>` : '';
+}
+
+// One card: the item, its controls, and its sub-items (any depth) as compact rows.
+function itemCard(item, opts, show) {
+  const s = effStatus(item), kids = hasKids(item), collapsed = ui.collapsed.includes(item.id);
+  const linkedInto = opts.linkedInto;
+  const fromTag = linkedInto ? `<span class="tag">From ${esc(IDX.initById.get(item.initiativeId)?.name || 'another initiative')}</span>` : '';
+  const title = opts.trackCard
+    ? `<a href="#" data-act="open-track" data-init="${item.initiativeId}" data-id="${item.id}" title="Open this track"><span class="code">Track ${codeOf(item)}</span>${esc(item.name)}</a>`
+    : `<span class="code">${codeOf(item)}</span>${esc(item.name)}`;
+  const subRows = [];
+  const walk = (parent, depth) => childrenOf(parent.id).filter(show).forEach(c => { subRows.push(subRow(c, depth)); if (!ui.collapsed.includes(c.id) || filtersActive()) walk(c, depth + 1); });
+  if (kids && (!collapsed || filtersActive())) walk(item, 0);
+  const nSubs = descendants(item).length;
+  return `<article class="icard ${isClosed(s) ? 'done' : ''}" style="--sc:${STATUS_META[s].color}">
+    <div class="ihead">
+      <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'} aria-label="Mark completed">
+      <div class="name">${title}</div>
+    </div>
+    ${itemMeta(item, { path: linkedInto ? pathText(item) : '', fromTag })}
+    <div class="ctrls">${statusSelect(item)}${dueChip(item)}</div>
+    ${canEdit() ? `<div class="ctrls">${dateInput(item)}<span class="grow"></span>
+      ${linkedInto ? `<button class="btn sm ghost" data-act="unlink" data-id="${item.id}" data-init="${linkedInto.id}" title="Stop showing this item in ${esc(linkedInto.name)}">Unlink</button>` : ''}
+      <button class="btn sm ghost" data-act="add-item" data-init="${item.initiativeId}" data-parent="${item.id}" title="Add sub-item under ${esc(codeOf(item))}">+ Sub</button>
+      <button class="btn sm" data-act="edit-item" data-id="${item.id}">Edit</button></div>`
+      : (item.deadline ? `<div class="meta-line">Deadline ${esc(fmtDate(item.deadline))}</div>` : '')}
+    ${kids ? `<div class="subs">
+      <button class="toggle" data-act="collapse" data-id="${item.id}" aria-expanded="${!collapsed}" style="align-self:flex-start">${collapsed ? '▶' : '▼'} ${nSubs} sub-item${nSubs === 1 ? '' : 's'}</button>
+      ${subRows.join('')}</div>` : ''}
+  </article>`;
+}
+
+function subRow(item, depth) {
+  const s = effStatus(item), kids = hasKids(item), collapsed = ui.collapsed.includes(item.id);
+  return `<div class="srow ${isClosed(s) ? 'done' : ''}" style="padding-left:${depth * 16}px">
+    ${kids ? `<button class="toggle" data-act="collapse" data-id="${item.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${esc(codeOf(item))}" style="padding:0 2px">${collapsed ? '▶' : '▼'}</button>` : ''}
+    <input type="checkbox" class="cb" data-act="done" data-id="${item.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'} aria-label="Mark ${esc(codeOf(item))} completed">
+    <span class="nm" title="${esc(item.name)}${item.notes ? ' — ' + esc(item.notes) : ''}"><span class="code">${codeOf(item)}</span>${esc(item.name)} ${dueChip(item)}</span>
+    ${statusSelect(item)}
+    ${canEdit() ? `<button class="btn sm ghost" data-act="edit-item" data-id="${item.id}" aria-label="Edit ${esc(codeOf(item))}">Edit</button>` : ''}
+  </div>`;
+}
+
+function renderBoard(cur) {
+  // Every work item gets a card, including items that have sub-items (shown with their
+  // rolled-up status). Tracks that have sub-items are left out: the sidebar and
+  // checklist already show them, and their sub-items are on the board.
+  const onBoard = i => !(hasKids(i) && !i.parentId);
+  const withSubtree = i => [i, ...descendants(i)];
+  let cards = rootsInScope(cur).flatMap(withSubtree).filter(onBoard);
+  if (cur && ui.track === 'all') {
+    const seen = new Set(cards);
+    // A linked item always gets its own card, even a track, so it can be unlinked here.
+    linkedRoots(cur).forEach(l => withSubtree(l).forEach(x => { if (!seen.has(x) && (x === l || onBoard(x))) { seen.add(x); cards.push(x); } }));
+  }
+  cards = cards.filter(matches);
+  const cols = STATUSES.filter(s => !(ui.hideDone && isClosed(s)) && (ui.status === 'all' || ui.status === s));
+  queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${cards.length} card${cards.length === 1 ? '' : 's'}${canEdit() ? ' · drag cards to change status' : ''}`; });
+  return `<div class="board" data-scroll-key="status-board:${ui.view}:${ui.track}">${cols.map(s => {
+    const items = cards.filter(l => effStatus(l) === s);
+    return `<div class="col" data-drop="${s}">
+      <div class="col-head"><span><span class="dot" style="background:${STATUS_META[s].color}"></span>${s}</span><span style="color:var(--muted)">${items.length}</span></div>
+      ${items.map(l => cardHTML(l, s, cur)).join('')}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function cardHTML(l, s, cur) {
+  const kids = hasKids(l);
+  const ls = kids ? stats(leavesUnder(l)) : null;
+  const src = cur ? linkSource(l, cur.id) : null;
+  const draggable = canEdit() && !kids; // a parent's status comes from its sub-items
+  const linkTags = (l.links || []).filter(x => x !== l.initiativeId).map(x => IDX.initById.get(x)).filter(Boolean).map(x => ` <span class="tag link">↔ ${esc(x.name)}</span>`).join('');
+  const linkedTag = src ? (src === l ? ' <span class="tag">linked</span>' : ` <span class="tag" title="Shown here because ${esc(codeOf(src))} is linked">via ${esc(codeOf(src))}</span>`) : '';
+  return `<div class="bcard ${isClosed(s) ? 'done' : ''}" ${draggable ? `draggable="true" data-drag="${l.id}"` : 'style="cursor:default"'}>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:flex-start">
+      <div class="name"><span class="code">${codeOf(l)}</span>${esc(l.name)}</div>
+      <input type="checkbox" class="cb" data-act="done" data-id="${l.id}" ${s === 'Completed' ? 'checked' : ''} ${kids ? 'disabled title="Completes automatically when all sub-items are completed"' : canEdit() ? '' : 'disabled'}>
+    </div>
+    <div class="path">${esc(pathText(l))}${linkedTag}${linkTags}${kids ? ` <span class="tag derived" title="Status rolled up from sub-items">${ls.done}/${ls.live} sub-items done</span>` : ''}</div>
+    <div class="foot">${statusSelect(l)}${dueChip(l)}${canEdit() ? `${src === l ? `<button class="btn sm ghost" data-act="unlink" data-id="${l.id}" data-init="${cur.id}" title="Stop showing this item in ${esc(cur.name)}">Unlink</button>` : ''}<button class="btn sm" data-act="edit-item" data-id="${l.id}">Edit</button>` : ''}</div>
+  </div>`;
+}
+
+/* ------------------------------------------------------------ scorecard */
+// Per initiative: a North Star statement and OKRs. Each OKR has a baseline, an
+// optional target, and results recorded over time; "better" depends on direction.
+const CURRENCY = ['$', 'S$', 'US$', '€', '£', '¥'];
+const fmtNum = v => v === null || v === undefined || Number.isNaN(v) ? '–' : new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(v);
+function withUnit(v, unit) {
+  const n = fmtNum(v);
+  if (!unit || n === '–') return n;
+  if (unit === '%') return n + '%';
+  if (CURRENCY.includes(unit)) return (v < 0 ? '-' : '') + unit + fmtNum(Math.abs(v));
+  return `${n} ${unit}`;
+}
+const okrResults = okr => db.results.filter(r => r.okrId === okr.id).sort((a, b) => (a.measuredOn + a.createdAt).localeCompare(b.measuredOn + b.createdAt));
+const okrsOf = initId => db.okrs.filter(o => o.initiativeId === initId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+const HEALTH = {
+  achieved: { label: 'Achieved', icon: '✓', color: 'var(--s-done)', bg: 'var(--s-done-bg)', ink: 'var(--s-done-ink)' },
+  ontrack:  { label: 'On track', icon: '●', color: 'var(--s-done)', bg: 'var(--s-done-bg)', ink: 'var(--s-done-ink)' },
+  improving:{ label: 'Improving', icon: '▲', color: 'var(--s-done)', bg: 'var(--s-done-bg)', ink: 'var(--s-done-ink)' },
+  atrisk:   { label: 'At risk', icon: '!', color: 'var(--s-pending)', bg: 'var(--s-pending-bg)', ink: 'var(--s-pending-ink)' },
+  flat:     { label: 'No change', icon: '–', color: 'var(--faint)', bg: 'var(--surface-2)', ink: 'var(--muted)' },
+  offtrack: { label: 'Off track', icon: '✕', color: 'var(--danger)', bg: 'var(--danger-soft)', ink: 'var(--danger)' },
+  declining:{ label: 'Declining', icon: '▼', color: 'var(--danger)', bg: 'var(--danger-soft)', ink: 'var(--danger)' },
+  noresult: { label: 'No results yet', icon: '○', color: 'var(--faint)', bg: 'var(--surface-2)', ink: 'var(--muted)' },
+};
+const HEALTH_HELP = 'On track: progress toward the target is keeping pace with the time elapsed between the baseline date and the target date (within 10 points). At risk: 10–25 points behind. Off track: further behind, or the target date has passed. Without a target, the card shows whether results are better or worse than the baseline.';
+
+function okrStats(okr) {
+  const results = okrResults(okr);
+  const last = results[results.length - 1];
+  const current = last ? last.value : null;
+  const sign = okr.direction === 'decrease' ? -1 : 1;
+  const change = current === null ? null : current - okr.baseline;
+  const better = change === null ? null : Math.sign(change * sign); // 1 better, -1 worse, 0 same
+  let progress = null;
+  if (okr.target !== null && okr.target !== undefined) {
+    const span = okr.target - okr.baseline;
+    progress = span === 0 ? (current === null ? 0 : (current - okr.target) * sign >= 0 ? 1 : 0) : ((current ?? okr.baseline) - okr.baseline) / span;
+  }
+  let health;
+  if (!last) health = 'noresult';
+  else if (progress !== null && progress >= 1) health = 'achieved';
+  else if (progress !== null && okr.targetDate && okr.baselineDate) {
+    const t0 = isoDays(okr.baselineDate), t1 = isoDays(okr.targetDate), now = isoDays(stamp());
+    if (now > t1) health = 'offtrack';
+    else {
+      const expected = t1 > t0 ? Math.min(1, Math.max(0, (now - t0) / (t1 - t0))) : 1;
+      const gap = progress - expected;
+      health = gap >= -0.1 ? 'ontrack' : gap >= -0.25 ? 'atrisk' : 'offtrack';
+    }
+  } else health = better > 0 ? 'improving' : better < 0 ? 'declining' : 'flat';
+  return { results, last, current, change, better, progress, health };
+}
+
+const healthChip = h => { const m = HEALTH[h]; return `<span class="pill" style="background:${m.bg};color:${m.ink}" title="${esc(HEALTH_HELP)}"><span aria-hidden="true">${m.icon}</span>${m.label}</span>`; };
+function changeChip(okr, st) {
+  if (st.change === null) return '<span class="chg flat">No result yet</span>';
+  if (st.better === 0) return `<span class="chg flat">– Same as baseline</span>`;
+  const arrow = st.change > 0 ? '▲' : '▼';
+  const word = st.better > 0 ? 'improved' : 'fell';
+  return `<span class="chg ${st.better > 0 ? 'good' : 'bad'}">${arrow} ${withUnit(Math.abs(st.change), okr.unit)} vs baseline · ${word}</span>`;
+}
+
+function sparkline(okr, st, w = 120, h = 34) {
+  const pts = [{ d: okr.baselineDate || (st.results[0] && st.results[0].measuredOn) || stamp(), v: okr.baseline }, ...st.results.map(r => ({ d: r.measuredOn, v: r.value }))];
+  if (pts.length < 2) return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true"><line x1="0" x2="${w}" y1="${h / 2}" y2="${h / 2}" stroke="var(--border-strong)" stroke-dasharray="3 3"/></svg>`;
+  const vals = pts.map(p => p.v).concat(okr.target ?? []);
+  let lo = Math.min(...vals), hi = Math.max(...vals); if (lo === hi) { lo -= 1; hi += 1; }
+  const ds = pts.map(p => isoDays(p.d)); const d0 = Math.min(...ds), d1 = Math.max(...ds) || d0 + 1;
+  const X = d => 3 + ((d - d0) / Math.max(1, d1 - d0)) * (w - 6), Y = v => 3 + (1 - (v - lo) / (hi - lo)) * (h - 6);
+  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${X(isoDays(p.d)).toFixed(1)},${Y(p.v).toFixed(1)}`).join('');
+  const last = pts[pts.length - 1];
+  return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true">
+    <line x1="0" x2="${w}" y1="${Y(okr.baseline).toFixed(1)}" y2="${Y(okr.baseline).toFixed(1)}" stroke="var(--faint)" stroke-dasharray="3 3"/>
+    ${okr.target !== null ? `<line x1="0" x2="${w}" y1="${Y(okr.target).toFixed(1)}" y2="${Y(okr.target).toFixed(1)}" stroke="var(--s-done)" stroke-dasharray="2 3"/>` : ''}
+    <path d="${path}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${X(isoDays(last.d)).toFixed(1)}" cy="${Y(last.v).toFixed(1)}" r="3.5" fill="var(--primary)" stroke="var(--surface)" stroke-width="1.5"/>
+  </svg>`;
+}
+
+function okrCard(okr, opts = {}) {
+  const st = okrStats(okr);
+  const pct = st.progress === null ? null : Math.max(0, Math.min(100, Math.round(st.progress * 100)));
+  return `<button type="button" class="okr" data-act="okr-open" data-id="${okr.id}" aria-label="Open ${esc(okr.keyResult)}">
+    <div class="okr-top"><span class="okr-kr">${esc(okr.keyResult)}</span>${healthChip(st.health)}</div>
+    ${opts.showObjective && okr.objective ? `<div class="meta-line">${esc(okr.objective)}</div>` : ''}
+    <div class="okr-mid">
+      <div><div class="okr-now">${st.current === null ? '<span style="color:var(--faint)">–</span>' : withUnit(st.current, okr.unit)}</div>
+        <div class="meta-line">Baseline ${withUnit(okr.baseline, okr.unit)}${okr.target !== null ? ` · Target ${withUnit(okr.target, okr.unit)}` : ''}</div></div>
+      ${sparkline(okr, st)}
+    </div>
+    ${changeChip(okr, st)}
+    ${pct !== null ? `<div><div class="meta-line" style="justify-content:space-between"><span>Progress to target${okr.targetDate ? ` (by ${fmtDate(okr.targetDate)})` : ''}</span><b style="color:var(--ink)">${pct}%</b></div>
+      <div class="mini-bar"><div style="width:${pct}%"></div></div></div>` : ''}
+    <div class="meta-line">${st.last ? `Updated ${fmtDate(st.last.measuredOn)}` : 'Add the first result to start tracking'}${okr.owner ? ` · 👤 ${esc(okr.owner)}` : ''}</div>
+  </button>`;
+}
+
+function scorecardSetupNote() {
+  return `<div class="banner">The Scorecard needs two new database tables. Add the okrs and okr_results tables to the database (see schema.sql), then reload this page. Your boards keep working meanwhile.</div>`;
+}
+
+function northStarCard(init) {
+  return `<section class="card ns" aria-label="North Star">
+    <div class="ns-label">★ North Star</div>
+    <div class="ns-text">${init.northStar ? esc(init.northStar) : `<span style="color:var(--faint)">${canEdit() ? 'Not set yet. Describe the single outcome that shows this initiative is succeeding.' : 'Not set yet.'}</span>`}</div>
+    ${canEdit() && store.hasNorthStar ? `<button class="btn sm" data-act="edit-ns" data-id="${init.id}">${init.northStar ? 'Edit' : 'Set North Star'}</button>` : ''}
+  </section>`;
+}
+
+function okrSummary(okrs) {
+  const counts = {}; okrs.forEach(o => { const h = okrStats(o).health; counts[h] = (counts[h] || 0) + 1; });
+  const order = ['achieved', 'ontrack', 'improving', 'atrisk', 'offtrack', 'declining', 'flat', 'noresult'];
+  return `<div class="okr-sum"><span><b>${okrs.length}</b> OKR${okrs.length === 1 ? '' : 's'}</span>${order.filter(h => counts[h]).map(h => `<span><span style="color:${HEALTH[h].color}" aria-hidden="true">${HEALTH[h].icon}</span> ${HEALTH[h].label} <b>${counts[h]}</b></span>`).join('')}</div>`;
+}
+
+function renderScorecard(cur) {
+  if (!store.hasOkrs) return scorecardSetupNote() + (cur ? northStarCard(cur) : '');
+  if (cur) {
+    const okrs = okrsOf(cur.id);
+    const groups = [];
+    okrs.forEach(o => { const k = o.objective.trim() || 'Other key results'; let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, list: [] }); g.list.push(o); });
+    return `${northStarCard(cur)}
+      <div class="section-title"><h2>OKRs</h2><span class="meta">Click an OKR to see its results over time${canEdit() ? ' and add new ones' : ''}</span></div>
+      ${okrs.length ? okrSummary(okrs) : ''}
+      ${groups.map(g => `<div class="okr-group"><h3 class="obj"><span class="obj-tag">Objective</span>${esc(g.k)}</h3><div class="okr-grid">${g.list.map(o => okrCard(o)).join('')}</div></div>`).join('')}
+      ${canEdit() ? `<div class="okr-grid"><button type="button" class="okr add" data-act="add-okr" data-init="${cur.id}"><span style="font-size:22px">+</span> Add OKR<span class="meta-line">Set the baseline now, then record results as they come in</span></button></div>`
+        : (!okrs.length ? '<div class="card empty">No OKRs yet.</div>' : '')}`;
+  }
+  return initiatives().map(i => {
+    const okrs = okrsOf(i.id);
+    return `<section class="sc-init">
+      <div class="section-title" style="margin-top:8px"><h2><a href="#" data-act="view-scorecard" data-view="${i.id}" style="color:inherit">${esc(i.name)}</a></h2>${okrs.length ? okrSummary(okrs) : '<span class="meta">No OKRs yet</span>'}</div>
+      <div class="ns-line"><span class="ns-label">★ North Star</span> ${i.northStar ? esc(i.northStar) : '<span style="color:var(--faint)">Not set yet</span>'}</div>
+      ${okrs.length ? `<div class="okr-grid">${okrs.map(o => okrCard(o, { showObjective: true })).join('')}</div>` : ''}
+    </section>`;
+  }).join('') || '<div class="card empty">No initiatives yet.</div>';
+}
+
+/* --- OKR chart: results over time against the baseline and target --- */
+function niceTicks(lo, hi, n = 5) {
+  const span = hi - lo || Math.abs(hi) || 1, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || raw;
+  const start = Math.floor(lo / step) * step, out = [];
+  for (let v = start; v <= hi + step * 0.5 && out.length < 12; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function okrChart(okr, st, W) {
+  const H = 300, L = 64, R = 112, T = 18, B = 40;
+  const pts = [{ d: okr.baselineDate || (st.results[0] && st.results[0].measuredOn) || stamp(), v: okr.baseline, base: true }, ...st.results.map(r => ({ d: r.measuredOn, v: r.value, note: r.note }))];
+  const days = pts.map(p => isoDays(p.d)).concat(okr.targetDate ? [isoDays(okr.targetDate)] : []).concat(st.results.length ? [] : [isoDays(stamp())]);
+  let d0 = Math.min(...days), d1 = Math.max(...days); if (d1 - d0 < 14) { d1 = d0 + 14; }
+  const vals = pts.map(p => p.v).concat(okr.target ?? []);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo || Math.abs(hi) || 1) * 0.15; lo -= pad; hi += pad;
+  if (Math.min(...vals) >= 0 && lo < 0) lo = 0; // no negative axis for values that are never negative (e.g. %)
+  const ticks = niceTicks(lo, hi).filter(t => t >= lo - 1e-9); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  const X = d => L + ((d - d0) / (d1 - d0)) * (W - L - R), Y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  // x labels: about 5 dates
+  // x axis: label the dates that were actually keyed (baseline, each result, target date),
+  // never evenly spaced in-between dates. Where labels would overlap, the baseline, the
+  // latest result and the target date win; the rest keep a tick and their hover tooltip.
+  const keyed = [...new Set([isoDays(pts[0].d), ...st.results.map(r => isoDays(r.measuredOn)), ...(okr.targetDate ? [isoDays(okr.targetDate)] : [])])].sort((a, b) => a - b);
+  const priority = d => d === isoDays(pts[0].d) ? 0 : (okr.targetDate && d === isoDays(okr.targetDate)) ? 1 : (st.last && d === isoDays(st.last.measuredOn)) ? 2 : 3;
+  const xl = [];
+  [...keyed].sort((a, b) => priority(a) - priority(b) || b - a).forEach(d => { if (xl.every(o => Math.abs(X(o) - X(d)) >= 52)) xl.push(d); });
+  const thisYear = new Date().getFullYear();
+  const dateLabel = d => { const y = new Date(d * DAY).getUTCFullYear(); return fmtShort(daysIso(d)) + (y !== thisYear ? ' ' + String(y).slice(2) : ''); };
+  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${X(isoDays(p.d)).toFixed(1)},${Y(p.v).toFixed(1)}`).join('');
+  const area = path + `L${X(isoDays(pts[pts.length - 1].d)).toFixed(1)},${(H - B)}L${X(isoDays(pts[0].d)).toFixed(1)},${H - B}Z`;
+  const yb = Y(okr.baseline), yt = okr.target !== null ? Y(okr.target) : null;
+  const sep = yt !== null && Math.abs(yt - yb) < 14 ? (yt < yb ? -7 : 7) : 0; // keep the two right-hand labels apart
+  const planned = okr.target !== null && okr.targetDate ? `<line x1="${X(isoDays(pts[0].d)).toFixed(1)}" y1="${yb.toFixed(1)}" x2="${X(isoDays(okr.targetDate)).toFixed(1)}" y2="${yt.toFixed(1)}" stroke="var(--faint)" stroke-width="1.5" stroke-dasharray="1 4" stroke-linecap="round"/>` : '';
+  const today = isoDays(stamp());
+  return `<svg class="okr-chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(`${okr.keyResult}: baseline ${withUnit(okr.baseline, okr.unit)}${okr.target !== null ? `, target ${withUnit(okr.target, okr.unit)}` : ''}, ${st.results.length} result(s)${st.last ? `, latest ${withUnit(st.current, okr.unit)}` : ''}`)}">
+    ${ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${L - 8}" y="${(Y(t) + 4).toFixed(1)}" text-anchor="end" class="ax">${esc(withUnit(t, okr.unit))}</text>`).join('')}
+    ${keyed.map(d => `<line x1="${X(d).toFixed(1)}" x2="${X(d).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 4"/>
+      <line x1="${X(d).toFixed(1)}" x2="${X(d).toFixed(1)}" y1="${H - B}" y2="${H - B + 5}" stroke="var(--border-strong)" stroke-width="1"/>`).join('')}
+    ${xl.map(d => `<text x="${X(d).toFixed(1)}" y="${H - B + 20}" text-anchor="middle" class="ax" data-axis-date="${daysIso(d)}">${dateLabel(d)}</text>`).join('')}
+    ${today >= d0 && today <= d1 ? `<line x1="${X(today).toFixed(1)}" x2="${X(today).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--primary)" stroke-width="1" opacity=".35"/><text x="${X(today).toFixed(1)}" y="${T - 5}" text-anchor="middle" class="ax">Today</text>` : ''}
+    ${planned}
+    <line x1="${L}" x2="${W - R}" y1="${yb.toFixed(1)}" y2="${yb.toFixed(1)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="${W - R + 8}" y="${(yb + 4 - sep).toFixed(1)}" class="ref">Baseline ${esc(withUnit(okr.baseline, okr.unit))}</text>
+    ${yt !== null ? `<line x1="${L}" x2="${W - R}" y1="${yt.toFixed(1)}" y2="${yt.toFixed(1)}" stroke="var(--s-done)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="${W - R + 8}" y="${(yt + 4 + sep).toFixed(1)}" class="ref" style="fill:var(--s-done-ink)">Target ${esc(withUnit(okr.target, okr.unit))}</text>
+      ${okr.targetDate ? `<path d="M${X(isoDays(okr.targetDate)).toFixed(1)},${(yt - 6).toFixed(1)}l6,6l-6,6l-6,-6z" fill="var(--s-done)" stroke="var(--surface)" stroke-width="1.5"/>` : ''}` : ''}
+    ${pts.length > 1 ? `<path d="${area}" fill="var(--primary)" opacity=".07"/><path d="${path}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+    ${pts.map((p, i) => `<circle cx="${X(isoDays(p.d)).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="${p.base ? 4.5 : 5}" fill="${p.base ? 'var(--surface)' : 'var(--primary)'}" stroke="${p.base ? 'var(--muted)' : 'var(--surface)'}" stroke-width="2"/>
+      <circle class="hit" cx="${X(isoDays(p.d)).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="14" fill="transparent" data-tip="${esc(`${p.base ? 'Baseline' : 'Result'} · ${fmtDate(p.d)}\n${withUnit(p.v, okr.unit)}${!p.base ? ` (${p.v - okr.baseline >= 0 ? '+' : ''}${fmtNum(p.v - okr.baseline)} vs baseline)` : ''}${p.note ? '\n' + p.note : ''}`)}"/>`).join('')}
+    ${st.last ? `<text x="${(X(isoDays(st.last.measuredOn)) + 8).toFixed(1)}" y="${(Y(st.current) - 9).toFixed(1)}" class="lastv">${esc(withUnit(st.current, okr.unit))}</text>` : ''}
+  </svg>`;
+}
+
+let okrDetailOpen = null, okrDetailTimer, editingResult = null; // editingResult: id of the result row being edited
+function scheduleOkrDetail() { clearTimeout(okrDetailTimer); okrDetailTimer = setTimeout(() => { if (okrDetailOpen && document.getElementById('modal')) okrDetail(okrDetailOpen, { keepForm: true }); }, 80); }
+
+function okrDetail(id, opts = {}) {
+  const okr = db.okrs.find(o => o.id === id);
+  if (!okr) { if (okrDetailOpen === id) { closeModal(); toast('That OKR was deleted.'); } return; }
+  const typed = opts.keepForm ? { v: document.getElementById('resValue')?.value, d: document.getElementById('resDate')?.value, n: document.getElementById('resNote')?.value } : null;
+  // Keep an in-progress row edit across re-renders (e.g. a live update from another browser).
+  const typedEdit = opts.keepForm && editingResult && document.getElementById('editResValue')
+    ? { v: document.getElementById('editResValue').value, d: document.getElementById('editResDate').value, n: document.getElementById('editResNote').value } : null;
+  if (okrDetailOpen !== id || (editingResult && !db.results.some(r => r.id === editingResult))) editingResult = null;
+  okrDetailOpen = id;
+  const st = okrStats(okr), init = IDX.initById.get(okr.initiativeId);
+  const W = Math.max(320, Math.min(820, window.innerWidth - 80));
+  const rows = [...st.results].reverse().map((r, i, arr) => {
+    if (canEdit() && r.id === editingResult) {
+      const t = typedEdit || { v: String(r.value), d: r.measuredOn, n: r.note };
+      return `<tr class="editing" data-edit-row="${r.id}">
+        <td><input id="editResDate" type="date" value="${esc(t.d)}" aria-label="Measured on" required></td>
+        <td class="num"><input id="editResValue" type="number" step="any" inputmode="decimal" value="${esc(t.v)}" aria-label="Result${okr.unit ? ` (${esc(okr.unit)})` : ''}" required></td>
+        <td class="num" style="color:var(--muted)">${okr.unit ? esc(okr.unit) : ''}</td>
+        <td><input id="editResNote" type="text" value="${esc(t.n)}" placeholder="Note (optional)" aria-label="Note"></td>
+        <td class="row-acts"><button class="btn sm primary" data-res-save="${r.id}">Save</button><button class="btn sm" data-res-cancel>Cancel</button></td></tr>`;
+    }
+    const prev = arr[i + 1] ? arr[i + 1].value : okr.baseline;
+    const d = r.value - prev, better = Math.sign(d * (okr.direction === 'decrease' ? -1 : 1));
+    return `<tr><td>${fmtDate(r.measuredOn)}</td><td class="num"><b>${withUnit(r.value, okr.unit)}</b></td>
+      <td class="num ${better > 0 ? 'good' : better < 0 ? 'bad' : ''}">${d === 0 ? '–' : (d > 0 ? '▲ ' : '▼ ') + withUnit(Math.abs(d), okr.unit)}</td>
+      <td>${esc(r.note)}</td>${canEdit() ? `<td class="row-acts"><button class="btn sm ghost" data-res-edit="${r.id}" aria-label="Edit result from ${fmtDate(r.measuredOn)}">Edit</button><button class="btn sm ghost" data-res-del="${r.id}" aria-label="Delete result from ${fmtDate(r.measuredOn)}">Delete</button></td>` : ''}</tr>`;
+  }).join('');
+  openModal(`
+    <header><h3>${esc(okr.keyResult)}</h3><button class="btn ghost sm" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div class="meta-line">${esc(init?.name || '')}${okr.objective ? ` · Objective: ${esc(okr.objective)}` : ''}${okr.owner ? ` · 👤 ${esc(okr.owner)}` : ''} · ${okr.direction === 'decrease' ? 'Lower is better' : 'Higher is better'}</div>
+      <div class="okr-facts">
+        <div><span>Baseline</span><b>${withUnit(okr.baseline, okr.unit)}</b><em>${okr.baselineDate ? fmtDate(okr.baselineDate) : ''}</em></div>
+        <div><span>Latest</span><b>${st.current === null ? '–' : withUnit(st.current, okr.unit)}</b><em>${st.last ? fmtDate(st.last.measuredOn) : 'No results yet'}</em></div>
+        <div><span>Target</span><b>${okr.target === null ? '–' : withUnit(okr.target, okr.unit)}</b><em>${okr.targetDate ? 'by ' + fmtDate(okr.targetDate) : ''}</em></div>
+        <div><span>Status</span>${healthChip(st.health)}<em>${st.progress !== null ? Math.round(Math.max(0, st.progress) * 100) + '% of the way' : ''}</em></div>
+      </div>
+      ${changeChip(okr, st)}
+      <div class="chart-wrap">${okrChart(okr, st, W)}<div class="chart-tip" hidden></div></div>
+      <div class="rm-legend"><span><span class="lg-line" style="border-color:var(--primary);border-top-style:solid"></span>Results</span><span><span class="lg-line" style="border-color:var(--muted)"></span>Baseline</span>${okr.target !== null ? `<span><span class="lg-line" style="border-color:var(--s-done)"></span>Target</span>` : ''}${okr.target !== null && okr.targetDate ? `<span><span class="lg-line" style="border-color:var(--faint);border-top-style:dotted"></span>Planned path</span>` : ''}</div>
+      ${canEdit() ? `<form class="res-form" data-res-form autocomplete="off">
+        <div class="field"><label for="resValue">New result${okr.unit ? ` (${esc(okr.unit)})` : ''}</label><input id="resValue" type="number" step="any" inputmode="decimal" required></div>
+        <div class="field"><label for="resDate">Measured on</label><input id="resDate" type="date" value="${stamp()}" required></div>
+        <div class="field grow"><label for="resNote">Note</label><input id="resNote" type="text" placeholder="Optional"></div>
+        <button class="btn primary" type="submit">Add result</button>
+      </form>` : ''}
+      ${st.results.length ? `<div class="res-table-wrap"><table class="res-table"><thead><tr><th>Date</th><th class="num">Result</th><th class="num">Change</th><th>Note</th>${canEdit() ? '<th></th>' : ''}</tr></thead><tbody>${rows}
+        <tr class="base"><td>${okr.baselineDate ? fmtDate(okr.baselineDate) : ''}</td><td class="num">${withUnit(okr.baseline, okr.unit)}</td><td class="num">Baseline</td><td></td>${canEdit() ? '<td></td>' : ''}</tr></tbody></table></div>`
+        : `<div class="empty">No results recorded yet.${canEdit() ? ' Add the first one above.' : ''}</div>`}
+    </div>
+    <footer>
+      <div>${canEdit() ? `<button class="btn sm" data-okr-edit>Edit OKR</button>` : ''}</div>
+      <div><button class="btn" data-close>Close</button></div>
+    </footer>`, bd => {
+    bd.querySelector('.modal').classList.add('wide');
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { okrDetailOpen = null; closeModal(); });
+    bd.querySelector('[data-okr-edit]')?.addEventListener('click', () => { okrDetailOpen = null; okrModal({ id: okr.id }); });
+    if (typed) { if (typed.v) bd.querySelector('#resValue').value = typed.v; if (typed.d) bd.querySelector('#resDate').value = typed.d; if (typed.n) bd.querySelector('#resNote').value = typed.n; }
+    const form = bd.querySelector('[data-res-form]');
+    form?.addEventListener('submit', e => {
+      e.preventDefault();
+      const v = bd.querySelector('#resValue').value, d = bd.querySelector('#resDate').value;
+      if (v === '' || Number.isNaN(Number(v))) { toast('Enter the result as a number.'); bd.querySelector('#resValue').focus(); return; }
+      if (!d) { toast('Choose the date it was measured.'); return; }
+      const r = { id: uid(), okrId: okr.id, value: Number(v), measuredOn: d, note: bd.querySelector('#resNote').value.trim(), createdAt: new Date().toISOString() };
+      db.results.push(r); commit({ results: [r] });
+      render(); okrDetail(okr.id);
+      const s2 = okrStats(okr);
+      toast(`Recorded ${withUnit(r.value, okr.unit)} · ${HEALTH[s2.health].label}`);
+      document.getElementById('resValue')?.focus();
+    });
+    // Edit a result in place: value, date and note.
+    bd.querySelectorAll('[data-res-edit]').forEach(b => b.onclick = () => { editingResult = b.dataset.resEdit; okrDetail(okr.id); document.getElementById('editResValue')?.focus(); });
+    const cancelEdit = () => { editingResult = null; okrDetail(okr.id); };
+    const saveEdit = () => {
+      const r = db.results.find(x => x.id === editingResult); if (!r) { cancelEdit(); return; }
+      const v = bd.querySelector('#editResValue').value, d = bd.querySelector('#editResDate').value;
+      if (v === '' || Number.isNaN(Number(v))) { toast('Enter the result as a number.'); bd.querySelector('#editResValue').focus(); return; }
+      if (!d) { toast('Choose the date it was measured.'); bd.querySelector('#editResDate').focus(); return; }
+      const note = bd.querySelector('#editResNote').value.trim();
+      if (Number(v) === r.value && d === r.measuredOn && note === r.note) { cancelEdit(); return; }
+      Object.assign(r, { value: Number(v), measuredOn: d, note });
+      editingResult = null;
+      commit({ results: [r] }); render(); okrDetail(okr.id);
+      toast(`Result updated to ${withUnit(r.value, okr.unit)} on ${fmtDate(r.measuredOn)}.`);
+    };
+    bd.querySelector('[data-res-save]')?.addEventListener('click', saveEdit);
+    bd.querySelector('[data-res-cancel]')?.addEventListener('click', cancelEdit);
+    bd.querySelector('[data-edit-row]')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelEdit(); }
+    });
+    bd.querySelectorAll('[data-res-del]').forEach(b => b.onclick = () => {
+      const r = db.results.find(x => x.id === b.dataset.resDel); if (!r) return;
+      confirmDialog(`Delete the result ${withUnit(r.value, okr.unit)} from ${fmtDate(r.measuredOn)}?`, 'Delete result', () => {
+        db.results = db.results.filter(x => x.id !== r.id); commit({ delResults: [r.id] }); render(); okrDetail(okr.id);
+      }, () => okrDetail(okr.id));
+    });
+    // hover tooltip on chart points
+    const wrap = bd.querySelector('.chart-wrap'), tip = bd.querySelector('.chart-tip');
+    wrap.addEventListener('pointerover', e => { const c = e.target.closest('.hit'); if (!c) return; tip.textContent = c.dataset.tip; tip.hidden = false;
+      const r = c.getBoundingClientRect(), w = wrap.getBoundingClientRect(); tip.style.left = Math.min(w.width - 180, Math.max(0, r.left - w.left - 70)) + 'px'; tip.style.top = (r.top - w.top - 62) + 'px'; });
+    wrap.addEventListener('pointerout', e => { if (e.target.closest('.hit')) tip.hidden = true; });
+  });
+  if (!opts.keepForm) document.getElementById('resValue')?.focus();
+}
+
+function okrModal({ id, initiativeId }) {
+  const okr = id ? db.okrs.find(o => o.id === id) : null;
+  const initId = okr ? okr.initiativeId : initiativeId;
+  const objectives = [...new Set(okrsOf(initId).map(o => o.objective).filter(Boolean))];
+  openModal(`
+    <header><h3>${okr ? 'Edit OKR' : 'Add OKR'}</h3><button class="btn ghost sm" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div class="field"><label for="okObj">Objective</label><input type="text" id="okObj" name="objective" list="okObjList" value="${esc(okr?.objective || '')}" placeholder="e.g. Make budgeting faster and more accurate">
+        <datalist id="okObjList">${objectives.map(o => `<option value="${esc(o)}">`).join('')}</datalist>
+        <div class="help">OKRs with the same objective are grouped together.</div></div>
+      <div class="field"><label for="okKr">Key result</label><input type="text" id="okKr" name="keyResult" value="${esc(okr?.keyResult || '')}" placeholder="e.g. Days to close the annual budget"></div>
+      <div class="two">
+        <div class="field"><label for="okUnit">Unit</label><input type="text" id="okUnit" name="unit" list="okUnits" value="${esc(okr?.unit || '')}" placeholder="e.g. %, days, $">
+          <datalist id="okUnits"><option value="%"><option value="days"><option value="hours"><option value="$"><option value="S$"><option value="items"><option value="users"></datalist></div>
+        <div class="field"><label for="okDir">Better when the number</label><select id="okDir" name="direction">
+          <option value="increase" ${okr?.direction !== 'decrease' ? 'selected' : ''}>goes up (higher is better)</option>
+          <option value="decrease" ${okr?.direction === 'decrease' ? 'selected' : ''}>goes down (lower is better)</option></select></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="okBase">Baseline <span style="color:var(--danger)">*</span></label><input type="number" step="any" inputmode="decimal" id="okBase" name="baseline" value="${okr ? esc(String(okr.baseline)) : ''}" placeholder="Where it is today"></div>
+        <div class="field"><label for="okBaseDate">Baseline date</label><input type="date" id="okBaseDate" name="baselineDate" value="${esc(okr?.baselineDate || stamp())}"></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="okTarget">Target</label><input type="number" step="any" inputmode="decimal" id="okTarget" name="target" value="${okr && okr.target !== null ? esc(String(okr.target)) : ''}" placeholder="Optional"></div>
+        <div class="field"><label for="okTargetDate">Target date</label><input type="date" id="okTargetDate" name="targetDate" value="${esc(okr?.targetDate || '')}"></div>
+      </div>
+      <div class="field"><label for="okOwner">Owner</label><input type="text" id="okOwner" name="owner" value="${esc(okr?.owner || '')}" placeholder="Optional"></div>
+      <div class="help" data-err style="color:var(--danger)" hidden></div>
+    </div>
+    <footer>
+      <div>${okr ? '<button class="btn sm danger" data-del>Delete OKR</button>' : ''}</div>
+      <div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>${okr ? 'Save' : 'Add OKR'}</button></div>
+    </footer>`, bd => {
+    const q = n => bd.querySelector(`[name="${n}"]`);
+    const err = m => { const e = bd.querySelector('[data-err]'); e.textContent = m; e.hidden = !m; };
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { closeModal(); if (okr) okrDetail(okr.id); });
+    // Suggest the direction from baseline vs target, until the person picks one.
+    let dirTouched = !!okr;
+    q('direction').addEventListener('change', () => { dirTouched = true; });
+    const guess = () => { if (dirTouched) return; const b = q('baseline').value, t = q('target').value; if (b !== '' && t !== '') q('direction').value = Number(t) < Number(b) ? 'decrease' : 'increase'; };
+    q('baseline').addEventListener('input', guess); q('target').addEventListener('input', guess);
+    bd.querySelector('[data-save]').onclick = () => {
+      const keyResult = q('keyResult').value.trim(), b = q('baseline').value, t = q('target').value;
+      if (!keyResult) { err('Enter the key result you are measuring.'); q('keyResult').focus(); return; }
+      if (b === '' || Number.isNaN(Number(b))) { err('Enter the baseline as a number: the value before the work started.'); q('baseline').focus(); return; }
+      if (t !== '' && Number.isNaN(Number(t))) { err('The target must be a number.'); q('target').focus(); return; }
+      if (q('targetDate').value && q('baselineDate').value && q('targetDate').value <= q('baselineDate').value) { err('The target date must be after the baseline date.'); return; }
+      const dir = q('direction').value;
+      if (t !== '' && ((dir === 'increase' && Number(t) < Number(b)) || (dir === 'decrease' && Number(t) > Number(b)))) { err(`The target is ${dir === 'increase' ? 'below' : 'above'} the baseline, but you chose “${dir === 'increase' ? 'higher' : 'lower'} is better”. Check the direction.`); return; }
+      const now = new Date().toISOString();
+      const fields = { objective: q('objective').value.trim(), keyResult, unit: q('unit').value.trim(), direction: dir, baseline: Number(b), baselineDate: q('baselineDate').value || stamp(),
+        target: t === '' ? null : Number(t), targetDate: q('targetDate').value, owner: q('owner').value.trim(), updatedAt: now };
+      let saved;
+      if (okr) { Object.assign(okr, fields); saved = okr; }
+      else { saved = { id: uid(), initiativeId: initId, order: okrsOf(initId).length ? Math.max(...okrsOf(initId).map(o => o.order ?? 0)) + 1 : 0, createdAt: now, ...fields }; db.okrs.push(saved); }
+      commit({ okrs: [saved] });
+      closeModal(); render(); okrDetail(saved.id);
+      toast(okr ? 'OKR saved.' : 'OKR added. Record results here as they come in.');
+    };
+    bd.querySelector('[data-del]')?.addEventListener('click', () => {
+      const n = okrResults(okr).length;
+      confirmDialog(`Delete the OKR “${okr.keyResult}”${n ? ` and its ${n} recorded result${n === 1 ? '' : 's'}` : ''}? This cannot be undone.`, 'Delete OKR', () => {
+        const delResults = db.results.filter(r => r.okrId === okr.id).map(r => r.id);
+        db.results = db.results.filter(r => r.okrId !== okr.id); db.okrs = db.okrs.filter(o => o.id !== okr.id);
+        commit({ delResults, delOkrs: [okr.id] }); render(); toast('OKR deleted.');
+      }, () => okrModal({ id: okr.id }));
+    });
+  });
+}
+
+function northStarModal(initId) {
+  const init = IDX.initById.get(initId);
+  openModal(`
+    <header><h3>North Star · ${esc(init.name)}</h3><button class="btn ghost sm" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div class="field"><label for="nsText">North Star</label><textarea id="nsText" rows="3" placeholder="The one outcome that shows ${esc(init.name)} is succeeding, e.g. “Every budget line planned, tracked and explained in one place”">${esc(init.northStar || '')}</textarea>
+        <div class="help">Keep it to one sentence that everyone on the initiative can repeat.</div></div>
+    </div>
+    <footer><span></span><div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>Save</button></div></footer>`, bd => {
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+    bd.querySelector('[data-save]').onclick = () => { init.northStar = bd.querySelector('#nsText').value.trim(); commit({ inits: [init] }); closeModal(); render(); toast('North Star saved.'); };
+    bd.querySelector('#nsText').focus();
+  });
+}
+
+/* --------------------------------------------------------------- modals */
+function openModal(html, onMount) {
+  closeModal();
+  const bd = document.createElement('div');
+  bd.className = 'backdrop'; bd.id = 'modal';
+  bd.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  bd.addEventListener('mousedown', e => { if (e.target === bd) closeModal(); });
+  document.body.appendChild(bd);
+  onMount && onMount(bd);
+  const f = bd.querySelector('input[type=text]'); f && f.focus();
+}
+function closeModal() { document.getElementById('modal')?.remove(); }
+function confirmDialog(message, okLabel, onOk, onCancel) {
+  openModal(`
+    <header><h3>Please confirm</h3></header>
+    <div class="body"><p class="confirm-text">${esc(message)}</p></div>
+    <footer><span></span><div style="display:flex;gap:8px"><button class="btn" data-no>Cancel</button><button class="btn primary" data-yes>${esc(okLabel)}</button></div></footer>`, bd => {
+    bd.querySelector('[data-no]').onclick = () => { closeModal(); onCancel && onCancel(); };
+    bd.querySelector('[data-yes]').onclick = () => { closeModal(); onOk(); };
+    bd.querySelector('[data-yes]').focus();
+  });
+}
+
+function itemModal({ id, initiativeId, parentId }) {
+  const item = id ? IDX.byId.get(id) : null;
+  const initId = item ? item.initiativeId : initiativeId;
+  const init = IDX.initById.get(initId);
+  const pId = item ? item.parentId : (parentId || null);
+  const kids = item && hasKids(item);
+  const banned = new Set(item ? [item.id, ...descendants(item).map(d => d.id)] : []);
+  const parentOptions = [];
+  const walk = (list, depth) => list.forEach(i => { if (!banned.has(i.id)) { parentOptions.push(`<option value="${i.id}" ${i.id === pId ? 'selected' : ''}>${'  '.repeat(depth)}${esc(codeOf(i))} ${esc(i.name)}</option>`); walk(childrenOf(i.id), depth + 1); } });
+  walk(tracksOf(initId), 0);
+  const parent = pId && IDX.byId.get(pId);
+  const heading = item ? `Edit ${depthOf(item) === 0 ? 'track' : 'item'} ${codeOf(item)}` : (parent ? `Add sub-item under ${codeOf(parent)}` : `Add track to ${esc(init?.name || '')}`);
+  const status = item ? item.status : (parent ? 'Thoughts' : 'Thoughts');
+  const others = initiatives().filter(i => i.id !== initId);
+
+  openModal(`
+    <header><h3>${heading}</h3><button class="btn ghost sm" data-close>✕</button></header>
+    <div class="body">
+      <div class="field"><label>Name</label><input type="text" name="name" value="${esc(item?.name || '')}" placeholder="${parent ? 'e.g. Debtor Report' : 'e.g. Debt Management'}"></div>
+      <div class="field"><label>Parent</label>
+        <select name="parentId"><option value="">— Top-level track in ${esc(init?.name || '')} —</option>${parentOptions.join('')}</select>
+        <div class="help">Nest as deep as you need (Track 1 → 1a → 1a.1 → 1a.1.1 …). Numbering updates automatically.</div>
+      </div>
+      <div class="two">
+        <div class="field"><label>Status</label>
+          <select name="status" ${kids ? 'disabled' : ''}>${STATUSES.map(s => `<option ${s === (kids ? effStatus(item) : status) ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          ${kids ? `<div class="help">Rolled up from sub-items (lowest status). Change a sub-item to update it.</div>` : ''}
+        </div>
+        <div class="field"><label>Deadline</label><input type="date" name="deadline" value="${esc(item?.deadline || '')}"><div class="help" data-due></div></div>
+      </div>
+      ${store.hasStartDate ? `<div class="two">
+        <div class="field"><label for="startDate">Start date</label><input type="date" id="startDate" name="startDate" value="${esc(item?.startDate || '')}">
+          <div class="help">With a deadline, places this item as a bar on the roadmap.</div></div>
+        <div class="field"></div>
+      </div>` : ''}
+      <div class="field"><label>Owner</label><input type="text" name="owner" value="${esc(item?.owner || '')}" placeholder="Optional"></div>
+      <div class="field"><label>Notes</label><textarea name="notes" placeholder="Optional">${esc(item?.notes || '')}</textarea></div>
+      ${others.length ? `<div class="field"><label>Also linked to initiative</label><div class="checks">${others.map(o => `<label><input type="checkbox" name="links" value="${o.id}" ${(item?.links || []).includes(o.id) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('')}</div>
+        <div class="help">Linked items, with their sub-items, also appear on that initiative’s boards.</div>
+        ${item ? others.map(o => { const src = ancestors(item).reverse().find(x => (x.links || []).includes(o.id)); return src ? `<div class="help">Also shown in ${esc(o.name)} because its parent ${esc(codeOf(src))} ${esc(src.name)} is linked. Unlink ${esc(codeOf(src))} to remove it there.</div>` : ''; }).join('') : ''}</div>` : ''}
+    </div>
+    <footer>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${item ? `<button class="btn sm danger" data-del>Delete</button><button class="btn sm" data-move="-1" title="Move up">↑</button><button class="btn sm" data-move="1" title="Move down">↓</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>${item ? 'Save' : 'Add'}</button></div>
+    </footer>`, bd => {
+    const q = n => bd.querySelector(`[name="${n}"]`);
+    const showDue = () => {
+      const v = q('deadline').value, el = bd.querySelector('[data-due]');
+      if (!v) { el.textContent = ''; return; }
+      const n = daysUntil(v);
+      el.textContent = n < 0 ? `Overdue by ${-n} day${n === -1 ? '' : 's'}` : n === 0 ? 'Due today' : `${n} day${n === 1 ? '' : 's'} from today`;
+      el.style.color = n < 0 ? 'var(--danger)' : n <= 7 ? 'var(--warn)' : '';
+    };
+    q('deadline').addEventListener('input', showDue); showDue();
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+    bd.querySelector('[data-save]').onclick = () => {
+      const name = q('name').value.trim();
+      if (!name) { q('name').focus(); toast('Please enter a name.'); return; }
+      const startDate = q('startDate') ? q('startDate').value : (item?.startDate || '');
+      if (startDate && q('deadline').value && startDate > q('deadline').value) { q('startDate').focus(); toast('The start date must be on or before the deadline.'); return; }
+      const links = [...bd.querySelectorAll('[name=links]:checked')].map(x => x.value);
+      const newParent = q('parentId').value || null;
+      if (item) {
+        if (item.parentId !== newParent) { item.parentId = newParent; item.order = nextOrder(initId, newParent); }
+        Object.assign(item, { name, startDate, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links });
+        if (!kids) { const ns = q('status').value; if (ns === 'Completed' && item.status !== 'Completed') item.prevStatus = item.status; item.status = ns; }
+        touch(item);
+        commit({ items: [item] });
+      } else {
+        const now = new Date().toISOString();
+        const created = { id: uid(), initiativeId: initId, parentId: newParent, name, status: q('status').value, startDate, deadline: q('deadline').value, owner: q('owner').value.trim(), notes: q('notes').value.trim(), links, order: nextOrder(initId, newParent), createdAt: now, updatedAt: now };
+        db.items.push(created); commit({ items: [created] });
+        if (newParent) ui.collapsed = ui.collapsed.filter(c => c !== newParent);
+      }
+      saveUI(); closeModal(); render();
+    };
+    bd.querySelector('[data-del]')?.addEventListener('click', () => {
+      const n = descendants(item).length;
+      confirmDialog(`Delete “${item.name}”${n ? ` and its ${n} sub-item${n > 1 ? 's' : ''}` : ''}? This cannot be undone.`, 'Delete', () => deleteItem(item.id), () => itemModal({ id: item.id }));
+    });
+    bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => { moveItem(item.id, Number(b.dataset.move)); itemModal({ id: item.id }); });
+  });
+}
+
+function initModal(id) {
+  const init = id ? IDX.initById.get(id) : null;
+  const tracks = init ? tracksOf(init.id) : [];
+  const linkedIn = init ? db.items.filter(i => i.initiativeId !== init.id && (i.links || []).includes(init.id)) : [];
+  const okrCount = init ? (db.okrs || []).filter(o => o.initiativeId === init.id).length : 0;
+  const delNote = !init ? '' : okrCount && !tracks.length
+    ? `To delete this initiative, first delete its ${okrCount} OKR${okrCount === 1 ? '' : 's'} on the Scorecard.`
+    : tracks.length
+    ? `To delete this initiative, first delete its ${tracks.length} track${tracks.length === 1 ? '' : 's'}.`
+    : 'This initiative has no tracks, so it can be deleted.';
+  openModal(`
+    <header><h3>${init ? 'Edit initiative' : 'New initiative'}</h3><button class="btn ghost sm" data-close>✕</button></header>
+    <div class="body">
+      <div class="field"><label for="initName">Name</label><input type="text" id="initName" name="name" value="${esc(init?.name || '')}" placeholder="e.g. POLARIS">
+        ${init ? '<div class="help">Renaming keeps all tracks, items, links and progress.</div>' : ''}</div>
+      <div class="field"><label for="initDesc">Description</label><input type="text" id="initDesc" name="description" value="${esc(init?.description || '')}" placeholder="Optional one-liner"></div>
+      <div class="help" data-err style="color:var(--danger)" hidden></div>
+      ${init ? `<div class="help" data-delnote>${delNote}</div>` : ''}
+    </div>
+    <footer>
+      <div style="display:flex;gap:6px">${init ? `<button class="btn sm danger" data-del ${tracks.length || okrCount ? 'disabled title="Delete its tracks and OKRs first"' : ''}>Delete initiative</button><button class="btn sm" data-move="-1" title="Move left">←</button><button class="btn sm" data-move="1" title="Move right">→</button>` : ''}</div>
+      <div style="display:flex;gap:8px"><button class="btn" data-close>Cancel</button><button class="btn primary" data-save>${init ? 'Save' : 'Create'}</button></div>
+    </footer>`, bd => {
+    const err = m => { const e = bd.querySelector('[data-err]'); e.textContent = m; e.hidden = !m; };
+    bd.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+    bd.querySelector('[data-save]').onclick = () => {
+      const name = bd.querySelector('[name=name]').value.trim();
+      const description = bd.querySelector('[name=description]').value.trim();
+      if (!name) { err('Enter a name for the initiative.'); bd.querySelector('[name=name]').focus(); return; }
+      const clash = db.initiatives.find(i => i.id !== init?.id && i.name.trim().toLowerCase() === name.toLowerCase());
+      if (clash) { err(`An initiative called “${clash.name}” already exists. Choose a different name.`); return; }
+      if (init) { Object.assign(init, { name, description }); commit({ inits: [init] }); toast(`Saved ${name}.`); }
+      else { const n = { id: uid(), name, description, order: db.initiatives.length ? Math.max(...db.initiatives.map(i => i.order ?? 0)) + 1 : 0, createdAt: new Date().toISOString() }; db.initiatives.push(n); commit({ inits: [n] }); ui.view = n.id; ui.track = 'all'; }
+      saveUI(); closeModal(); render();
+    };
+    bd.querySelector('[data-del]')?.addEventListener('click', () => {
+      // Re-check against the latest data: someone may have added a track meanwhile.
+      index();
+      const left = tracksOf(init.id).length;
+      const leftOkrs = db.okrs.filter(o => o.initiativeId === init.id).length;
+      if (!left && leftOkrs) { err(`“${init.name}” still has ${leftOkrs} OKR${leftOkrs === 1 ? '' : 's'}. Delete ${leftOkrs === 1 ? 'it' : 'them'} on the Scorecard first.`); return; }
+      if (left) { err(`“${init.name}” still has ${left} track${left === 1 ? '' : 's'}. Delete ${left === 1 ? 'it' : 'them'} first.`); return; }
+      const linkNote = linkedIn.length ? ` ${linkedIn.length} item${linkedIn.length === 1 ? '' : 's'} from other initiatives linked to it will be unlinked.` : '';
+      confirmDialog(`Delete initiative “${init.name}”? It has no tracks.${linkNote}`, 'Delete initiative', () => {
+        db.initiatives = db.initiatives.filter(i => i.id !== init.id);
+        const relinked = db.items.filter(i => (i.links || []).includes(init.id));
+        relinked.forEach(i => { i.links = i.links.filter(l => l !== init.id); touch(i); });
+        commit({ items: relinked, delInits: [init.id] }).then(ok => { if (ok) toast(`Deleted ${init.name}.`); });
+        ui.view = 'overview'; ui.track = 'all'; saveUI(); render();
+      }, () => initModal(init.id));
+    });
+    bd.querySelectorAll('[data-move]').forEach(b => b.onclick = () => {
+      const list = initiatives(); const i = list.indexOf(init), j = i + Number(b.dataset.move);
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]]; list.forEach((x, k) => x.order = k); commit({ inits: list }); render();
+    });
+  });
+}
+
+/* --------------------------------------------------------------- export */
+function rowsForExport() {
+  const rows = [];
+  const walk = (item, depth) => {
+    const d = dueInfo(item), dl = effDeadline(item), init = IDX.initById.get(item.initiativeId), track = trackOf(item);
+    rows.push({
+      'Initiative': init?.name || '',
+      'Track': `${codeOf(track)}. ${track.name}`,
+      'Code': codeOf(item),
+      'Item': '    '.repeat(depth) + item.name,
+      'Level': depth === 0 ? 'Track' : `Sub-item (level ${depth})`,
+      'Has sub-items': hasKids(item) ? 'Yes' : 'No',
+      'Status': effStatus(item),
+      'Status source': hasKids(item) ? 'Rolled up (lowest of sub-items)' : 'Set directly',
+      'Start date': item.startDate ? fmtDate(item.startDate) : '',
+      'Deadline': dl.date ? fmtDate(dl.date) + (dl.inherited ? ' (earliest sub-item)' : '') : '',
+      'Days to deadline': d && !isClosed(effStatus(item)) ? d.n : '',
+      'Deadline status': d ? d.text : '',
+      'Owner': item.owner || '',
+      'Linked initiatives': (item.links || []).map(l => IDX.initById.get(l)?.name).filter(Boolean).join(', '),
+      'Notes': item.notes || '',
+      'Last updated': item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '',
+    });
+    childrenOf(item.id).forEach(c => walk(c, depth + 1));
+  };
+  initiatives().forEach(i => tracksOf(i.id).forEach(t => walk(t, 0)));
+  return rows;
+}
+function summaryRows() {
+  const rows = [];
+  const all = stats(allLeaves());
+  rows.push({ 'Initiative': 'PROJECT AHA (all)', 'Track': '', 'Status (lowest)': lowestStatus(initiatives().flatMap(i => tracksOf(i.id))) || '', 'Work items': all.total, 'Completed': all.done, 'Void': all.counts.Void, 'Progress %': all.pct, ...Object.fromEntries(STATUSES.map(s => [s, all.counts[s]])) });
+  initiatives().forEach(i => {
+    const st = stats(leavesOfInit(i.id));
+    rows.push({ 'Initiative': i.name, 'Track': '(all tracks)', 'Status (lowest)': lowestStatus(tracksOf(i.id)) || '', 'Work items': st.total, 'Completed': st.done, 'Void': st.counts.Void, 'Progress %': st.pct, ...Object.fromEntries(STATUSES.map(s => [s, st.counts[s]])) });
+    tracksOf(i.id).forEach(t => {
+      const ts = stats(leavesUnder(t));
+      rows.push({ 'Initiative': i.name, 'Track': `${codeOf(t)}. ${t.name}`, 'Status (lowest)': effStatus(t), 'Work items': ts.total, 'Completed': ts.done, 'Void': ts.counts.Void, 'Progress %': ts.pct, ...Object.fromEntries(STATUSES.map(s => [s, ts.counts[s]])) });
+    });
+  });
+  return rows;
+}
+function stamp() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
+function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+function exportExcel() {
+  index();
+  const items = rowsForExport(), summary = summaryRows();
+  if (window.XLSX) {
+    const wb = XLSX.utils.book_new();
+    const add = (rows, name, widths) => { const ws = XLSX.utils.json_to_sheet(rows); ws['!cols'] = widths.map(w => ({ wch: w })); ws['!autofilter'] = { ref: ws['!ref'] }; XLSX.utils.book_append_sheet(wb, ws, name); };
+    add(summary, 'Summary', [26, 36, 16, 11, 11, 7, 11, ...STATUSES.map(() => 12)]);
+    add(items, 'Work items', [22, 34, 8, 60, 18, 12, 14, 30, 30, 15, 22, 18, 26, 40, 20]);
+    if (store.hasOkrs && db.okrs.length) {
+      const okrRows = initiatives().flatMap(i => okrsOf(i.id).map(o => { const st = okrStats(o); return {
+        'Initiative': i.name, 'North Star': i.northStar || '', 'Objective': o.objective, 'Key result': o.keyResult, 'Unit': o.unit,
+        'Better when': o.direction === 'decrease' ? 'Lower' : 'Higher', 'Baseline': o.baseline, 'Baseline date': o.baselineDate ? fmtDate(o.baselineDate) : '',
+        'Target': o.target ?? '', 'Target date': o.targetDate ? fmtDate(o.targetDate) : '', 'Latest result': st.current ?? '',
+        'Latest date': st.last ? fmtDate(st.last.measuredOn) : '', 'Change vs baseline': st.change ?? '',
+        'Progress to target %': st.progress === null ? '' : Math.round(st.progress * 100), 'Status': HEALTH[st.health].label, 'Owner': o.owner }; }));
+      const resRows = initiatives().flatMap(i => okrsOf(i.id).flatMap(o => okrResults(o).map(r => ({
+        'Initiative': i.name, 'Key result': o.keyResult, 'Measured on': fmtDate(r.measuredOn), 'Result': r.value, 'Unit': o.unit, 'Note': r.note }))));
+      add(okrRows, 'Scorecard', [20, 36, 30, 36, 8, 10, 10, 14, 10, 14, 12, 14, 12, 12, 14, 18]);
+      if (resRows.length) add(resRows, 'OKR results', [20, 36, 14, 10, 8, 40]);
+    }
+    initiatives().forEach(i => {
+      const rows = items.filter(r => r.Initiative === i.name);
+      if (rows.length) add(rows, i.name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31), [22, 34, 8, 60, 18, 12, 14, 30, 30, 15, 22, 18, 26, 40, 20]);
+    });
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    download(`Project_AHA_${stamp()}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  } else {
+    // Offline fallback: CSV opens directly in Excel.
+    const cols = Object.keys(items[0] || {});
+    const csv = [cols, ...items.map(r => cols.map(c => r[c]))].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    download(`Project_AHA_${stamp()}.csv`, new Blob(['﻿' + csv], { type: 'text/csv' }));
+    toast('Excel library unavailable offline — exported CSV instead (opens in Excel).');
+  }
+}
+function backup() { download(`Project_AHA_backup_${stamp()}.json`, new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' })); }
+function restore(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(r.result);
+      if (!Array.isArray(data.initiatives) || !Array.isArray(data.items)) throw new Error('bad shape');
+    } catch { showError('That file is not a valid Project AHA backup. Choose a .json file made with the Backup button.'); return; }
+    confirmDialog(`Replace all current data with this backup (${data.initiatives.length} initiatives, ${data.items.length} items)? This changes the tracker for everyone.`, 'Replace data', async () => {
+      // Very old backups used short ids like "orion"; give those new UUIDs.
+      const ids = new Map();
+      const map = id => (id == null || id === '') ? null : isUuid(id) ? id : (ids.has(id) ? ids.get(id) : (ids.set(id, uid()), ids.get(id)));
+      const inits = data.initiatives.map(x => ({ ...x, id: map(x.id) }));
+      const items = data.items.map(x => ({ ...x, id: map(x.id), initiativeId: map(x.initiativeId), parentId: map(x.parentId), links: (x.links || []).map(map) }));
+      const delInits = db.initiatives.map(i => i.id).filter(id => !inits.some(x => x.id === id));
+      const delItems = db.items.map(i => i.id).filter(id => !items.some(x => x.id === id));
+      const okrs = store.hasOkrs && Array.isArray(data.okrs) ? data.okrs.map(o => ({ ...o, id: map(o.id), initiativeId: map(o.initiativeId) })) : null;
+      const results = okrs && Array.isArray(data.results) ? data.results.map(r => ({ ...r, id: map(r.id), okrId: map(r.okrId) })) : null;
+      const delOkrs = okrs ? db.okrs.map(o => o.id).filter(id => !okrs.some(x => x.id === id)) : [];
+      const delResults = results ? db.results.map(r => r.id).filter(id => !results.some(x => x.id === id)) : [];
+      db = { initiatives: inits, items, okrs: okrs || db.okrs, results: results || db.results };
+      ui.view = 'overview'; ui.track = 'all'; saveUI(); render();
+      if (await commit({ delResults, delOkrs, delItems, delInits, inits, items, okrs: okrs || [], results: results || [] })) toast('Backup restored.');
+    });
+  };
+  r.readAsText(file);
+}
+
+let toastTimer;
+function toast(msg) { document.querySelector('.toast')?.remove(); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 3200); }
+
+/* --------------------------------------------------------------- events */
+const app = document.getElementById('app');
+const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore', 'unlink', 'qa-open', 'add-okr', 'edit-ns']);
+app.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const a = el.dataset.act;
+  if (EDIT_ACTIONS.has(a) && !canEdit()) return;
+  if (a === 'theme') { toggleTheme(); return; }
+  if (a === 'view') { e.preventDefault(); quickAdd.key = null; ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
+  else if (a === 'track') { ui.track = el.dataset.id; saveUI(); render(); }
+  else if (a === 'mode') { ui.mode = el.dataset.mode; normalizeMode(); saveUI(); render(); }
+  else if (a === 'collapse') { const id = el.dataset.id; ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter(x => x !== id) : [...ui.collapsed, id]; saveUI(); render(); }
+  else if (a === 'add-item') itemModal({ initiativeId: el.dataset.init, parentId: el.dataset.parent });
+  else if (a === 'edit-item') itemModal({ id: el.dataset.id });
+  else if (a === 'unlink') unlinkItem(el.dataset.id, el.dataset.init);
+  else if (a === 'qa-open') openQuickAdd(el.dataset.key);
+  else if (a === 'page') { ui.page = el.dataset.page === 'scorecard' ? 'scorecard' : 'work'; quickAdd.key = null; saveUI(); render(); }
+  else if (a === 'view-scorecard') { e.preventDefault(); ui.view = el.dataset.view; ui.track = 'all'; ui.page = 'scorecard'; saveUI(); render(); window.scrollTo({ top: 0 }); }
+  else if (a === 'add-okr') okrModal({ initiativeId: el.dataset.init });
+  else if (a === 'okr-open') okrDetail(el.dataset.id);
+  else if (a === 'edit-ns') northStarModal(el.dataset.id);
+  else if (a === 'rm-zoom') { ui.rmZoom = el.dataset.zoom; saveUI(); render(); }
+  else if (a === 'rm-today') scrollRoadmapToToday();
+  else if (a === 'rm-lane') { const k = el.dataset.key; ui.rmCollapsed = ui.rmCollapsed.includes(k) ? ui.rmCollapsed.filter(x => x !== k) : [...ui.rmCollapsed, k]; saveUI(); render(); }
+  else if (a === 'qa-close') closeQuickAdd();
+  else if (a === 'open-track') { e.preventDefault(); ui.view = el.dataset.init; ui.track = el.dataset.id; ui.mode = 'tracks'; saveUI(); render(); window.scrollTo({ top: 0 }); }
+  else if (a === 'add-init') initModal();
+  else if (a === 'edit-init') initModal(el.dataset.id);
+  else if (a === 'export-xlsx') exportExcel();
+  else if (a === 'backup') backup();
+  else if (a === 'restore') document.getElementById('importFile').click();
+});
+app.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.matches('[data-qa-form]') && canEdit()) submitQuickAdd(e.target);
+});
+app.addEventListener('change', e => {
+  const el = e.target; const a = el.dataset.act; if (!a) return;
+  if ((a === 'status' || a === 'deadline' || a === 'done') && !canEdit()) { render(); return; }
+  if (a === 'status') setStatus(el.dataset.id, el.value);
+  else if (a === 'deadline') setDeadline(el.dataset.id, el.value);
+  else if (a === 'done') toggleDone(el.dataset.id, el.checked);
+  else if (a === 'filter-status') { ui.status = el.value; saveUI(); render(); }
+  else if (a === 'hide-done') { ui.hideDone = el.checked; saveUI(); render(); }
+  else if (a === 'overdue-only') { ui.overdueOnly = el.checked; saveUI(); render(); }
+  else if (a === 'rm-unscheduled') { ui.rmUnscheduled = el.checked; saveUI(); render(); }
+});
+let searchTimer;
+app.addEventListener('input', e => {
+  if (e.target.matches('[data-qa-input]')) { quickAdd.value = e.target.value; return; }
+  if (e.target.dataset.act !== 'search') return;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    ui.search = e.target.value; saveUI(); render();
+    const s = app.querySelector('[data-act=search]'); s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+  }, 200);
+});
+// Board drag & drop
+app.addEventListener('dragstart', e => { if (!canEdit()) return; const c = e.target.closest('[data-drag]'); if (!c) return; e.dataTransfer.setData('text/plain', c.dataset.drag); c.classList.add('dragging'); });
+app.addEventListener('dragend', e => e.target.closest?.('[data-drag]')?.classList.remove('dragging'));
+app.addEventListener('dragover', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); app.querySelectorAll('.col.over').forEach(c => c !== col && c.classList.remove('over')); col.classList.add('over'); });
+app.addEventListener('dragleave', e => { const col = e.target.closest('[data-drop]'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
+app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id && canEdit() && IDX.byId.has(id) && !hasKids(IDX.byId.get(id))) setStatus(id, col.dataset.drop); });
+
+document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented) { if (document.getElementById('modal')) { okrDetailOpen = null; editingResult = null; closeModal(); } else closeQuickAdd(); } });
+
+start();
+</script>
+</body>
+</html>

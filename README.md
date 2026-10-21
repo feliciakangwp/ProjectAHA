@@ -35,6 +35,17 @@ Data is stored in Supabase; people sign in with email and password.
 - **Live updates**: changes made in one browser appear in every other open browser.
 - **Light / dark mode**: follows the device until you pick one with the ☾ Dark / ☀ Light button; the choice is remembered in that browser.
 
+## Standalone copy (no Supabase, no sign-in)
+`standalone/` is the same dashboard and Smart City with all data loading and saving routed through
+`standalone/adapter.js` (browser storage by default), for anyone who wants to connect their own
+database. Regenerate it after changing `index.html` or `city.html` with:
+
+```
+python3 tools/build-standalone.py [backup.json]
+```
+
+The optional `backup.json` (from the dashboard's **Backup** button) becomes its starting data.
+
 ## Supabase setup
 1. In the Supabase SQL Editor, run `supabase/setup.sql`. It creates the `initiatives`,
    `work_items`, `editors`, `okrs` and `okr_results` tables, turns on Row Level Security, enables
