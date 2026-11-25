@@ -2,7 +2,7 @@
 
 A single-page dashboard (`index.html`) for tracking work across the Project AHA
 initiatives (ORION, POLARIS, Payment Transformation, and any you add).
-Data is stored in Supabase; people sign in with email and password.
+There is no sign-in; data is kept in the browser (see **Data** below).
 
 ## Features
 - **Overview** of Project AHA: overall progress, status mix, initiative cards with per-track status, overdue / upcoming deadlines.
@@ -37,44 +37,44 @@ Data is stored in Supabase; people sign in with email and password.
 - **Start dates and deadlines** with a date picker and "N days left" / "Overdue by N days".
 - **Links** between an item and other initiatives.
 - **Export Excel**, **Backup** (JSON) and, for editors, **Restore**.
-- **Live updates**: changes made in one browser appear in every other open browser.
+- **Live updates** between open tabs in the same browser.
 - **Light / dark mode**: follows the device until you pick one with the ☾ Dark / ☀ Light button; the choice is remembered in that browser.
 
-## Standalone copy (no Supabase, no sign-in)
-`standalone/` is the same dashboard and Smart City with all data loading and saving routed through
-`standalone/adapter.js` (browser storage by default), for anyone who wants to connect their own
-database. Regenerate it after changing `index.html` or `city.html` with:
+## Data: no sign-in, no Supabase
+There is no login and no online database. Anyone who opens the page can view and edit.
+All loading and saving goes through **`adapter.js`**, which keeps the data **in the browser**
+(localStorage), so:
 
-```
-python3 tools/build-standalone.py [backup.json]
-```
+- **Each browser has its own copy.** Changes made on one computer do not appear on another.
+- The first time a browser opens the page it starts from **`data.js`** (the starting data).
+- To move data between browsers or people: **Backup** downloads a JSON file, **Restore** loads one.
+- Clearing the browser's site data deletes that browser's copy, so take a Backup now and then.
 
-The optional `backup.json` (from the dashboard's **Backup** button) becomes its starting data.
+To update the starting data everyone gets, replace the contents of `data.js` with a Backup file
+(keep `window.AHA_SEED =` at the start).
 
-## Supabase setup
-1. In the Supabase SQL Editor, run `supabase/setup.sql`. It creates the `initiatives`,
-   `work_items`, `editors`, `okrs` and `okr_results` tables, turns on Row Level Security, enables
-   realtime and loads the starting data. It is safe to run again: the starting data is only loaded
-   into an empty tracker, so deleted items never come back.
-   Already set up before the Scorecard existed? Run just `supabase/scorecard.sql` instead.
-2. **Authentication → URL Configuration**: set **Site URL** to where the dashboard is hosted
-   (for GitHub Pages: `https://feliciakangwp.github.io/ProjectAHA/`) and add the same address
-   under **Redirect URLs**. Invitation and password-reset links return there.
-3. **Authentication → Users → Invite user** to give someone access. They receive an email,
-   open the link, and set their password on the dashboard.
+### Connecting a database later
+Replace the functions in `adapter.js`; nothing else needs to change:
+- `load()` returns `{ initiatives, items, okrs, results }` (the Backup format, described at the top of `adapter.js`).
+- `save(change)` applies one edit: `change.upsert.<table>` holds full records to insert or replace by id,
+  `change.remove.<table>` holds ids to delete. Throw an `Error` to show a message on the page.
+- `subscribe(onChange)` (optional) calls `onChange()` when data changes elsewhere, for live updates.
+- `label` is the short text shown at the top of the dashboard, e.g. "Saved in this browser".
 
-The project URL and publishable key are in `index.html` (`SUPABASE_URL`, `SUPABASE_KEY`).
-The publishable key is designed to be public; access is enforced by the database policies.
+`schema.sql` suggests matching tables (PostgreSQL). If you add accounts, make `canEdit()` in
+`index.html` return whether the current user may edit; the page already hides every edit control
+when it returns false.
 
-## Who can do what
-- **Any signed-in user** can view everything and export.
-- **Editors** (emails in the `editors` table) can add, edit, delete, and restore backups.
-  Add an editor in the SQL Editor:
-  ```sql
-  insert into public.editors (email) values ('name@example.com');
-  ```
+## Files
+| File | What it is |
+|---|---|
+| `index.html` | The dashboard. |
+| `city.html` | The 3D Smart City (read-only view of the same data). |
+| `adapter.js` | The data connection (browser storage). |
+| `data.js` | Starting data, in the Backup format. |
+| `schema.sql` | Suggested tables for connecting a database. |
 
 ## Hosting
-Serve the folder over HTTPS, for example with GitHub Pages
-(**Settings → Pages → Deploy from a branch**). The page loads supabase-js, SheetJS and
-Google Fonts from public CDNs, so those must be reachable from the viewer's network.
+Serve the folder from any static host, for example GitHub Pages
+(**Settings → Pages → Deploy from a branch**), or open `index.html` directly. The page loads SheetJS
+(Excel export), Three.js (Smart City) and Google Fonts from public CDNs.

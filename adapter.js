@@ -23,7 +23,7 @@
    server, but each browser has its own copy.
    ===================================================================== */
 (function () {
-  const KEY = 'projectAHA.standalone.db.v1';
+  const KEY = 'projectAHA.db.v1';
   const TABLES = ['initiatives', 'items', 'okrs', 'results'];
   const clone = o => JSON.parse(JSON.stringify(o));
   const empty = () => ({ initiatives: [], items: [], okrs: [], results: [] });

@@ -9,7 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="data.js"></script>
+<script src="adapter.js"></script>
 <style>
   /* Layout: summary tiles on top, then a track sidebar beside the two boards (by track, by status). */
   :root {
@@ -448,34 +449,18 @@ const uid = () => crypto.randomUUID ? crypto.randomUUID()
 const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-/* ------------------------------------------------------- supabase data */
-// All data lives in Supabase (tables: initiatives, work_items, editors).
-// Row Level Security there decides who can read and who can change data;
-// the page hides edit controls for non-editors to match.
-const SUPABASE_URL = 'https://qzspaffquemmqqznasit.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_G638JH1qE9C8DVc7Emv8Ow_Opvy5tO9'; // publishable key: safe in the browser
-const PAGE_SIZE = 1000;
-
-// Read the auth link details before supabase-js consumes the URL.
-const LINK = (() => {
-  const h = new URLSearchParams(location.hash.replace(/^#/, ''));
-  const q = new URLSearchParams(location.search);
-  return {
-    type: h.get('type') || q.get('type') || '',
-    tokenHash: q.get('token_hash') || '',
-    error: h.get('error_description') || q.get('error_description') || '',
-    errorCode: h.get('error_code') || q.get('error_code') || '',
-  };
-})();
+/* -------------------------------------------------------------- data */
+// All loading and saving goes through window.AHA_ADAPTER (adapter.js), so a different
+// database can be plugged in by replacing that one file. There is no sign-in: everyone edits.
+const ADAPTER = window.AHA_ADAPTER;
 
 let db = { initiatives: [], items: [], okrs: [], results: [] }, ui;
 const store = {
-  sb: null, session: null, isEditor: false, loaded: false, loading: false, hasStartDate: false, hasOkrs: false, hasNorthStar: false, liveOkrs: null,
-  channel: null, live: 'off', queue: Promise.resolve(),
+  loaded: false, loading: false, hasStartDate: true, hasOkrs: true, hasNorthStar: true,
+  live: 'on', queue: Promise.resolve(),
 };
-// Auth screen state: 'checking' | 'signin' | 'reset-sent' | 'set-password' | 'app'
-const auth = { screen: 'checking', message: '', messageKind: 'error', busy: false, emailHint: '' };
-const canEdit = () => store.isEditor;
+const auth = { screen: 'app' };
+const canEdit = () => true;
 
 function loadUI() {
   try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
@@ -485,46 +470,11 @@ function loadUI() {
 function normalizeMode() { if (ui.mode === 'board') ui.mode = 'status'; if (!['status', 'roadmap'].includes(ui.mode)) ui.mode = 'tracks'; }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} }
 
-// Database rows use snake_case; the page uses camelCase.
-const fromInit = r => ({ id: r.id, name: r.name, description: r.description || '', northStar: r.north_star || '', order: r.sort_order ?? 0, createdAt: r.created_at });
-const toInit = x => Object.assign({ id: x.id, name: x.name, description: x.description || '', sort_order: x.order ?? 0 },
-  store.hasNorthStar ? { north_star: x.northStar || '' } : {});
-const num = v => (v === null || v === undefined || v === '' ? null : Number(v));
-const fromOkr = r => ({
-  id: r.id, initiativeId: r.initiative_id, objective: r.objective || '', keyResult: r.key_result, unit: r.unit || '',
-  direction: r.direction === 'decrease' ? 'decrease' : 'increase', baseline: num(r.baseline), baselineDate: r.baseline_date || '',
-  target: num(r.target), targetDate: r.target_date || '', owner: r.owner || '', order: r.sort_order ?? 0, createdAt: r.created_at, updatedAt: r.updated_at,
-});
-const toOkr = x => ({
-  id: x.id, initiative_id: x.initiativeId, objective: x.objective || '', key_result: x.keyResult, unit: x.unit || '', direction: x.direction,
-  baseline: x.baseline, baseline_date: x.baselineDate || null, target: x.target ?? null, target_date: x.targetDate || null,
-  owner: x.owner || '', sort_order: x.order ?? 0,
-});
-const fromResult = r => ({ id: r.id, okrId: r.okr_id, value: num(r.value), measuredOn: r.measured_on, note: r.note || '', createdAt: r.created_at });
-const toResult = x => ({ id: x.id, okr_id: x.okrId, value: x.value, measured_on: x.measuredOn, note: x.note || '' });
-const fromItem = r => ({
-  id: r.id, initiativeId: r.initiative_id, parentId: r.parent_id || null, name: r.name, status: r.status,
-  prevStatus: r.prev_status || undefined, startDate: r.start_date || '', deadline: r.deadline || '', owner: r.owner || '', notes: r.notes || '',
-  links: r.links || [], order: r.sort_order ?? 0, createdAt: r.created_at, updatedAt: r.updated_at,
-});
-const toItem = x => Object.assign({
-  id: x.id, initiative_id: x.initiativeId, parent_id: x.parentId || null, name: x.name, status: x.status,
-  prev_status: x.prevStatus || null, deadline: x.deadline || null, owner: x.owner || '', notes: x.notes || '',
-  links: x.links || [], sort_order: x.order ?? 0,
-}, store.hasStartDate ? { start_date: x.startDate || null } : {});
-
-// Turn a Supabase / network error into a sentence a person can act on.
+// Turn a storage error into a sentence a person can act on.
 function explain(err, doing) {
-  const code = err && (err.code || err.status);
-  const msg = (err && (err.message || err.error_description)) || '';
+  const msg = (err && (err.message || String(err))) || '';
   if (!navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(msg)) return `Could not ${doing}: no connection to the database. Check your internet connection and try again.`;
-  if (code === '42501' || /row-level security/i.test(msg)) return `Could not ${doing}: your account has view-only access. Ask an editor to add your email to the editors list.`;
-  if (code === 'PGRST301' || /JWT|expired/i.test(msg)) return `Could not ${doing}: your sign-in has expired. Sign out and sign in again.`;
-  if (code === '42P01' || /does not exist|schema cache/i.test(msg)) return `Could not ${doing}: the database tables are missing. Run supabase/setup.sql in the Supabase SQL Editor.`;
-  if (code === '23503' && /okrs/i.test(msg)) return `Could not ${doing}: the initiative still has OKRs. Delete them on the Scorecard first.`;
-  if (code === '23503' && /initiative/i.test(msg)) return `Could not ${doing}: the initiative still has tracks. Delete them first.`;
-  if (code === '23503') return `Could not ${doing}: it refers to an item that no longer exists. The page has been refreshed; please try again.`;
-  if (code === '23514') return `Could not ${doing}: a value is not allowed (${msg}).`;
+  if (/quota/i.test(msg)) return `Could not ${doing}: browser storage is full. Use Backup, then clear old data.`;
   return `Could not ${doing}${msg ? `: ${msg}` : '.'}`;
 }
 
@@ -539,118 +489,39 @@ function showError(message, retry, kind = 'other') {
 }
 function hideError() { document.getElementById('errorBar').hidden = true; }
 
-// A table that has not been created yet (setup step not run).
-const isMissingTable = err => err && (err.code === '42P01' || err.code === 'PGRST205' || /does not exist|schema cache/i.test(err.message || ''));
-async function fetchAll(table, order) {
-  const rows = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await store.sb.from(table).select('*').order(order).order('id').range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) return rows;
-  }
-}
-
+const asList = v => (Array.isArray(v) ? v : []);
 async function loadData({ quiet = false } = {}) {
-  if (!store.session) return;
   store.loading = true;
   if (!quiet) render();
   try {
-    const [inits, items, editor] = await Promise.all([
-      fetchAll('initiatives', 'sort_order'),
-      fetchAll('work_items', 'sort_order'),
-      store.sb.rpc('is_editor'),
-    ]);
-    if (editor.error) throw editor.error;
-    // The scorecard tables were added later; older databases may not have them yet.
-    let okrs = [], results = [];
-    try {
-      okrs = await fetchAll('okrs', 'sort_order');
-      results = await fetchAll('okr_results', 'measured_on');
-      store.hasOkrs = true;
-    } catch (err) {
-      if (!isMissingTable(err)) throw err;
-      store.hasOkrs = false;
-    }
-    store.hasNorthStar = inits.length ? 'north_star' in inits[0] : store.hasOkrs;
-    db = { initiatives: inits.map(fromInit), items: items.map(fromItem), okrs: okrs.map(fromOkr), results: results.map(fromResult) };
-    // start_date was added for the roadmap; older databases may not have it yet.
-    if (items.length) store.hasStartDate = 'start_date' in items[0];
-    else { const probe = await store.sb.from('work_items').select('start_date').limit(1); store.hasStartDate = !probe.error; }
-    store.isEditor = editor.data === true;
+    if (!ADAPTER) throw new Error('adapter.js did not load');
+    const d = await ADAPTER.load();
+    db = { initiatives: asList(d.initiatives), items: asList(d.items), okrs: asList(d.okrs), results: asList(d.results) };
+    db.items.forEach(i => { if (!Array.isArray(i.links)) i.links = []; if (i.deadline == null) i.deadline = ''; if (i.startDate == null) i.startDate = ''; });
+    db.okrs.forEach(o => { o.baseline = Number(o.baseline); o.target = o.target === null || o.target === undefined || o.target === '' ? null : Number(o.target); });
+    db.results.forEach(r => { r.value = Number(r.value); });
     store.loaded = true;
     if (document.getElementById('errorBar').dataset.kind === 'load') hideError();
-    if (!store.channel || store.liveOkrs !== store.hasOkrs) subscribeLive();
   } catch (err) {
     showError(explain(err, 'load the tracker'), () => loadData(), 'load');
   } finally {
     store.loading = false;
     render();
+    if (okrDetailOpen) scheduleOkrDetail();
   }
-}
-
-// Apply one realtime change from another browser (or our own echo).
-const LIVE_TABLES = { initiatives: ['initiatives', r => fromInit(r)], work_items: ['items', r => fromItem(r)], okrs: ['okrs', r => fromOkr(r)], okr_results: ['results', r => fromResult(r)] };
-function applyChange(table, payload) {
-  const [key, conv] = LIVE_TABLES[table];
-  if (payload.eventType === 'DELETE') {
-    const id = payload.old && payload.old.id;
-    if (!id) return;
-    db[key] = db[key].filter(x => x.id !== id);
-  } else {
-    const row = conv(payload.new);
-    const i = db[key].findIndex(x => x.id === row.id);
-    if (i >= 0) db[key][i] = row; else db[key].push(row);
-  }
-  scheduleRender();
-  if (okrDetailOpen && (table === 'okrs' || table === 'okr_results')) scheduleOkrDetail();
 }
 let renderTimer;
 function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); }
 
-function subscribeLive() {
-  if (store.channel) store.sb.removeChannel(store.channel);
-  let wasDown = false;
-  store.liveOkrs = store.hasOkrs;
-  let ch = store.sb.channel('aha-tracker');
-  Object.keys(LIVE_TABLES).filter(t => store.hasOkrs || !t.startsWith('okr')).forEach(t => {
-    ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, p => applyChange(t, p));
-  });
-  store.channel = ch.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        store.live = 'on';
-        if (wasDown) loadData({ quiet: true }); // catch up on anything missed while disconnected
-        wasDown = false;
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        store.live = 'down'; wasDown = true;
-      } else if (status === 'CLOSED') {
-        store.live = 'off';
-      }
-      render();
-    });
-}
-
 // Persist changes. Callers have already applied them to `db` so the page updates instantly.
 function commit({ items = [], inits = [], delItems = [], delInits = [], okrs = [], results = [], delOkrs = [], delResults = [] } = {}) {
-  if (!canEdit()) { toast('You have view-only access.'); return Promise.resolve(false); }
-  const sb = store.sb;
-  const depth = it => { let d = 0, p = it; const by = new Map(db.items.map(x => [x.id, x])); while (p && p.parentId && by.has(p.parentId) && d < 64) { d++; p = by.get(p.parentId); } return d; };
-  const chunks = (arr, n = 500) => arr.length ? Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n)) : [];
-  const ops = [];
-  chunks(inits).forEach(c => ops.push(() => sb.from('initiatives').upsert(c.map(toInit))));
-  // Parents before children so the parent reference always exists.
-  chunks([...items].sort((a, b) => depth(a) - depth(b))).forEach(c => ops.push(() => sb.from('work_items').upsert(c.map(toItem))));
-  chunks(okrs).forEach(c => ops.push(() => sb.from('okrs').upsert(c.map(toOkr))));
-  chunks(results).forEach(c => ops.push(() => sb.from('okr_results').upsert(c.map(toResult))));
-  chunks(delResults).forEach(c => ops.push(() => sb.from('okr_results').delete().in('id', c)));
-  chunks(delOkrs).forEach(c => ops.push(() => sb.from('okrs').delete().in('id', c)));
-  chunks(delItems).forEach(c => ops.push(() => sb.from('work_items').delete().in('id', c)));
-  chunks(delInits).forEach(c => ops.push(() => sb.from('initiatives').delete().in('id', c)));
-  // One request at a time keeps quick successive edits in order.
-  store.queue = store.queue.then(async () => {
-    for (const op of ops) { const { error } = await op(); if (error) throw error; }
-    return true;
-  }).catch(err => {
+  const plain = o => JSON.parse(JSON.stringify(o));
+  const change = {
+    upsert: { initiatives: inits.map(plain), items: items.map(plain), okrs: okrs.map(plain), results: results.map(plain) },
+    remove: { initiatives: [...delInits], items: [...delItems], okrs: [...delOkrs], results: [...delResults] },
+  };
+  // One save at a time keeps quick successive edits in order.
+  store.queue = store.queue.then(() => ADAPTER.save(change)).then(() => true).catch(err => {
     showError(explain(err, 'save your change') + ' Your last change was not saved; the page now shows what is stored.', null);
     loadData({ quiet: true });
     return false;
@@ -658,142 +529,12 @@ function commit({ items = [], inits = [], delItems = [], delInits = [], okrs = [
   return store.queue;
 }
 
-/* ---------------------------------------------------------------- auth */
-async function initAuth() {
+function start() {
   loadUI();
-  if (!window.supabase || !window.supabase.createClient) {
-    auth.screen = 'signin';
-    auth.message = 'Could not load the sign-in library. Check your internet connection (or any network filter blocking cdn.jsdelivr.net) and reload the page.';
-    render(); return;
-  }
-  store.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-
-  store.sb.auth.onAuthStateChange((event, session) => {
-    store.session = session;
-    if (event === 'PASSWORD_RECOVERY') { auth.screen = 'set-password'; render(); return; }
-    if (event === 'SIGNED_OUT') { enterSignedOut(); return; }
-    // Supabase calls this handler while holding its auth lock: defer further calls.
-    if (event === 'SIGNED_IN' && auth.screen === 'signin') setTimeout(enterApp, 0);
-  });
-
-  try {
-    if (LINK.tokenHash && LINK.type) {
-      const { error } = await store.sb.auth.verifyOtp({ token_hash: LINK.tokenHash, type: LINK.type });
-      if (error) throw error;
-    }
-    const { data, error } = await store.sb.auth.getSession();
-    if (error) throw error;
-    store.session = data.session;
-  } catch (err) {
-    store.session = null;
-    auth.message = linkErrorText(err.message);
-  }
-  if (LINK.error) auth.message = linkErrorText(LINK.error);
-
-  if (store.session && (LINK.type === 'invite' || LINK.type === 'recovery')) { auth.screen = 'set-password'; render(); }
-  else if (store.session) enterApp();
-  else { auth.screen = 'signin'; render(); }
-}
-function linkErrorText(msg) {
-  if (/expired|invalid/i.test(msg || '') || LINK.errorCode === 'otp_expired') return 'This link has expired or was already used. Ask an editor for a new invitation, or use “Forgot password?” below.';
-  return `That link did not work: ${msg}`;
-}
-function cleanUrl() { history.replaceState(null, '', location.pathname); }
-
-function enterApp() {
-  cleanUrl();
-  auth.screen = 'app'; auth.message = '';
-  loadData(); // subscribes to live updates once it knows which tables exist
-}
-function enterSignedOut() {
-  if (store.channel) { store.sb.removeChannel(store.channel); store.channel = null; }
-  store.session = null; store.isEditor = false; store.loaded = false; store.live = 'off';
-  db = { initiatives: [], items: [], okrs: [], results: [] };
-  hideError(); closeModal();
-  auth.screen = 'signin';
-  render();
-}
-async function signOut() {
-  const { error } = await store.sb.auth.signOut();
-  if (error) toast(explain(error, 'sign out'));
-  enterSignedOut();
-}
-
-function authHTML() {
-  const msg = auth.message ? `<div class="auth-msg ${auth.messageKind}" role="alert">${esc(auth.message)}</div>` : '';
-  const dis = auth.busy ? 'disabled' : '';
-  let body;
-  if (auth.screen === 'checking') {
-    body = `<p class="auth-sub">Checking your sign-in…</p>`;
-  } else if (auth.screen === 'set-password') {
-    const email = store.session?.user?.email || '';
-    body = `
-      <h2>Set your password</h2>
-      <p class="auth-sub">${LINK.type === 'invite' ? 'Welcome to the Project AHA tracker. Choose a password to finish setting up your account' : 'Choose a new password'}${email ? ` for <b>${esc(email)}</b>` : ''}.</p>
-      ${msg}
-      <form id="authForm" data-form="set-password" novalidate>
-        <div class="field"><label for="newPassword">New password</label><input type="password" id="newPassword" autocomplete="new-password" minlength="8" required></div>
-        <div class="field"><label for="confirmPassword">Confirm password</label><input type="password" id="confirmPassword" autocomplete="new-password" minlength="8" required>
-          <div class="help">At least 8 characters.</div></div>
-        <button class="btn primary block" type="submit" ${dis}>${auth.busy ? 'Saving…' : 'Save password and continue'}</button>
-      </form>`;
-  } else if (auth.screen === 'reset-sent') {
-    body = `
-      <h2>Check your email</h2>
-      <p class="auth-sub">If <b>${esc(auth.emailHint)}</b> has an account, a password reset link is on its way. Open it on this device to choose a new password.</p>
-      <button class="btn block" data-auth="back">Back to sign in</button>`;
-  } else {
-    body = `
-      <h2>Sign in</h2>
-      <p class="auth-sub">Project AHA finance transformation tracker. Access is by invitation.</p>
-      ${msg}
-      <form id="authForm" data-form="signin" novalidate>
-        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="username" value="${esc(auth.emailHint)}" required></div>
-        <div class="field"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required></div>
-        <button class="btn primary block" type="submit" ${dis}>${auth.busy ? 'Signing in…' : 'Sign in'}</button>
-      </form>
-      <button class="btn ghost block" data-auth="forgot" ${dis}>Forgot password?</button>`;
-  }
-  return `<div class="auth-wrap"><div class="card auth-card"><div class="auth-top"><div class="auth-brand">Project AHA</div>${themeButton()}</div>${body}</div></div>`;
-}
-
-async function handleAuthSubmit(form) {
-  const kind = form.dataset.form;
-  const say = (m, k = 'error') => { auth.message = m; auth.messageKind = k; auth.busy = false; render(); };
-  if (kind === 'signin') {
-    const email = form.querySelector('#email').value.trim(), password = form.querySelector('#password').value;
-    auth.emailHint = email;
-    if (!email || !password) return say('Enter your email and password.');
-    auth.busy = true; auth.message = ''; render();
-    const { error } = await store.sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      const m = /invalid login/i.test(error.message) ? 'Email or password is incorrect.'
-        : /not confirmed/i.test(error.message) ? 'This email has not been confirmed yet. Open the invitation email first.'
-        : explain(error, 'sign in');
-      return say(m);
-    }
-    auth.busy = false; // onAuthStateChange moves on to the dashboard
-  } else if (kind === 'set-password') {
-    const p1 = form.querySelector('#newPassword').value, p2 = form.querySelector('#confirmPassword').value;
-    if (p1.length < 8) return say('Use at least 8 characters.');
-    if (p1 !== p2) return say('The two passwords do not match.');
-    auth.busy = true; auth.message = ''; render();
-    const { error } = await store.sb.auth.updateUser({ password: p1 });
-    if (error) return say(/same/i.test(error.message) ? 'Choose a password different from your current one.' : explain(error, 'save your password'));
-    auth.busy = false;
-    toast('Password saved.');
-    enterApp();
-  }
-}
-async function forgotPassword() {
-  const email = (document.getElementById('email')?.value || '').trim();
-  auth.emailHint = email;
-  if (!email) { auth.message = 'Enter your email above, then choose “Forgot password?”.'; auth.messageKind = 'error'; render(); return; }
-  auth.busy = true; render();
-  const { error } = await store.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-  auth.busy = false;
-  if (error) { auth.message = explain(error, 'send the reset email'); auth.messageKind = 'error'; render(); return; }
-  auth.screen = 'reset-sent'; auth.message = ''; render();
+  loadData();
+  // Changes made elsewhere (another tab, another user): reload quietly.
+  let t;
+  if (ADAPTER && typeof ADAPTER.subscribe === 'function') ADAPTER.subscribe(() => { clearTimeout(t); t = setTimeout(() => loadData({ quiet: true }), 300); });
 }
 
 /* --------------------------------------------------------- derivations */
@@ -943,16 +684,6 @@ const dueChip = item => { const d = dueInfo(item); return d ? `<span class="due 
 
 function render() {
   const appEl = document.getElementById('app');
-  if (auth.screen !== 'app') {
-    const had = document.activeElement && appEl.contains(document.activeElement) ? document.activeElement.id : '';
-    // Keep what the person typed when the form re-renders with a message.
-    const typed = Object.fromEntries([...appEl.querySelectorAll('input[id]')].map(i => [i.id, i.value]));
-    appEl.innerHTML = authHTML();
-    Object.entries(typed).forEach(([id, v]) => { const i = document.getElementById(id); if (i && v) i.value = v; });
-    const f = (had && document.getElementById(had)) || [...appEl.querySelectorAll('input')].find(i => !i.value);
-    if (f) f.focus();
-    return;
-  }
   index();
   // Only fall back to the overview once data has loaded; before that no initiative exists yet.
   if (store.loaded && ui.view !== 'overview' && !IDX.initById.has(ui.view)) { ui.view = 'overview'; ui.track = 'all'; }
@@ -968,11 +699,8 @@ function render() {
     <div class="top">
       <div><h1>${title}</h1><div class="sub">${subtitle}</div>
         <div class="userbar">
-          <span class="who">${esc(store.session?.user?.email || '')}</span>
-          ${store.loaded ? (canEdit() ? '<span class="role edit">Editor</span>' : '<span class="role view" title="Ask an editor to add your email to the editors list to make changes">View only</span>') : ''}
-          <span class="mode-note" style="margin:0">${store.live === 'on' ? '<span class="dot" style="background:var(--s-done)"></span>Live' : store.live === 'down' ? '<span class="dot" style="background:var(--s-pending)"></span>Live updates paused, reconnecting…' : '<span class="dot" style="background:var(--faint)"></span>Connecting…'}</span>
+          <span class="mode-note" style="margin:0"><span class="dot" style="background:var(--s-done)"></span>${esc((ADAPTER && ADAPTER.label) || '')}</span>
           ${themeButton()}
-          <button class="btn sm ghost" data-act="sign-out">Sign out</button>
         </div></div>
       <div class="actions">
         <a class="btn city-link" href="city.html" title="See Project AHA as a 3D smart city: each initiative a plot, each track a building that rises as work is completed">🏙 Smart City</a>
@@ -1382,7 +1110,7 @@ function renderRoadmap(cur) {
   const anyDates = scheduled > 0;
   queueMicrotask(() => { const m = document.getElementById('countMeta'); if (m) m.textContent = `${scheduled} of ${total} item${total === 1 ? '' : 's'} on the timeline`; });
   const setupNote = !store.hasStartDate
-    ? `<div class="banner">Roadmap bars need a start date. Until it is added, items with a deadline show as milestones. To turn on start dates, run this once in the Supabase SQL Editor:
+    ? `<div class="banner">Roadmap bars need a start date. Until it is added, items with a deadline show as milestones. To turn on start dates, add this column to the database:
         <code style="display:block;margin-top:6px;white-space:pre-wrap;font-family:var(--mono);font-size:12px">alter table public.work_items add column if not exists start_date date;</code></div>` : '';
   const hint = !anyDates && lanes.length ? `<div class="banner info">Nothing has dates yet. ${canEdit() ? 'Click “Not scheduled · add dates” on any row (or Edit a card) and set a start date and deadline to place it on the roadmap.' : 'Editors can add start dates and deadlines to place items on the roadmap.'}</div>` : '';
   return `${setupNote}${hint}
@@ -1727,8 +1455,7 @@ function okrCard(okr, opts = {}) {
 }
 
 function scorecardSetupNote() {
-  return `<div class="banner">The Scorecard needs two new database tables. Run <b>supabase/scorecard.sql</b> once in the Supabase SQL Editor
-    (open it on GitHub, copy everything, paste into a new query and click Run), then reload this page. Your boards keep working meanwhile.</div>`;
+  return `<div class="banner">The Scorecard needs two new database tables. Add the okrs and okr_results tables to the database (see schema.sql), then reload this page. Your boards keep working meanwhile.</div>`;
 }
 
 function northStarCard(init) {
@@ -2273,7 +2000,7 @@ function restore(file) {
       if (!Array.isArray(data.initiatives) || !Array.isArray(data.items)) throw new Error('bad shape');
     } catch { showError('That file is not a valid Project AHA backup. Choose a .json file made with the Backup button.'); return; }
     confirmDialog(`Replace all current data with this backup (${data.initiatives.length} initiatives, ${data.items.length} items)? This changes the tracker for everyone.`, 'Replace data', async () => {
-      // Backups from before the move to Supabase used short ids like "orion"; give those new UUIDs.
+      // Very old backups used short ids like "orion"; give those new UUIDs.
       const ids = new Map();
       const map = id => (id == null || id === '') ? null : isUuid(id) ? id : (ids.has(id) ? ids.get(id) : (ids.set(id, uid()), ids.get(id)));
       const inits = data.initiatives.map(x => ({ ...x, id: map(x.id) }));
@@ -2299,12 +2026,9 @@ function toast(msg) { document.querySelector('.toast')?.remove(); const t = docu
 const app = document.getElementById('app');
 const EDIT_ACTIONS = new Set(['add-item', 'edit-item', 'add-init', 'edit-init', 'restore', 'unlink', 'qa-open', 'add-okr', 'edit-ns']);
 app.addEventListener('click', e => {
-  const authBtn = e.target.closest('[data-auth]');
-  if (authBtn) { if (authBtn.dataset.auth === 'forgot') forgotPassword(); else { auth.screen = 'signin'; auth.message = ''; render(); } return; }
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act;
   if (EDIT_ACTIONS.has(a) && !canEdit()) return;
-  if (a === 'sign-out') { signOut(); return; }
   if (a === 'theme') { toggleTheme(); return; }
   if (a === 'view') { e.preventDefault(); quickAdd.key = null; ui.view = el.dataset.view; ui.track = 'all'; saveUI(); render(); window.scrollTo({ top: 0 }); }
   else if (a === 'track') { ui.track = el.dataset.id; saveUI(); render(); }
@@ -2332,8 +2056,7 @@ app.addEventListener('click', e => {
 });
 app.addEventListener('submit', e => {
   e.preventDefault();
-  if (e.target.id === 'authForm' && !auth.busy) handleAuthSubmit(e.target);
-  else if (e.target.matches('[data-qa-form]') && canEdit()) submitQuickAdd(e.target);
+  if (e.target.matches('[data-qa-form]') && canEdit()) submitQuickAdd(e.target);
 });
 app.addEventListener('change', e => {
   const el = e.target; const a = el.dataset.act; if (!a) return;
@@ -2366,7 +2089,7 @@ app.addEventListener('drop', e => { const col = e.target.closest('[data-drop]');
 document.getElementById('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) restore(f); e.target.value = ''; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented) { if (document.getElementById('modal')) { okrDetailOpen = null; editingResult = null; closeModal(); } else closeQuickAdd(); } });
 
-initAuth();
+start();
 </script>
 </body>
 </html>

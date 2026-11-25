@@ -115,7 +115,8 @@
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="data.js"></script>
+<script src="adapter.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -171,9 +172,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 /* ------------------------------------------------------------------ data */
-// Same project and key as index.html (publishable key: safe in the browser).
-const SUPABASE_URL = 'https://qzspaffquemmqqznasit.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_G638JH1qE9C8DVc7Emv8Ow_Opvy5tO9';
 const STATUSES = ['Thoughts', 'Pending User', 'Planning', 'Developing', 'IT Testing', 'User Testing', 'Completed', 'Void'];
 const RANK = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
 const STATUS_HEX = { 'Thoughts': '#64748b', 'Pending User': '#d97706', 'Planning': '#0891b2', 'Developing': '#ea580c', 'IT Testing': '#2563eb', 'User Testing': '#7c3aed', 'Completed': '#047857', 'Void': '#a8a29e' };
@@ -193,21 +191,16 @@ function showMessage(title, body, actions = '') {
   msgEl.hidden = false;
 }
 
-let sb = null;
 let raw = { initiatives: [], items: [] };
-
-async function fetchAll(table, order) {
-  const rows = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from(table).select('*').order(order).order('id').range(from, from + 999);
-    if (error) throw error;
-    rows.push(...data);
-    if (data.length < 1000) return rows;
-  }
-}
+const ADAPTER = window.AHA_ADAPTER;
+// The adapter returns the dashboard's record shape; the city works on these fields.
 async function loadData() {
-  const [inits, items] = await Promise.all([fetchAll('initiatives', 'sort_order'), fetchAll('work_items', 'sort_order')]);
-  raw = { initiatives: inits, items };
+  if (!ADAPTER) throw new Error('adapter.js did not load');
+  const d = await ADAPTER.load();
+  raw = {
+    initiatives: (d.initiatives || []).map(i => ({ id: i.id, name: i.name, description: i.description || '', north_star: i.northStar || '', sort_order: i.order ?? 0 })),
+    items: (d.items || []).map(i => ({ id: i.id, initiative_id: i.initiativeId, parent_id: i.parentId || null, name: i.name, status: i.status, sort_order: i.order ?? 0 })),
+  };
 }
 
 // Roll the tracker up into plots (initiatives) and buildings (tracks).
@@ -1010,10 +1003,6 @@ async function start() {
   if (!renderer) {
     showMessage('3D is not available in this browser', 'Your browser or device has WebGL turned off, so the city cannot be drawn. The plot list on the right still shows each initiative’s progress.', '<a class="link" href="index.html">← Back to the dashboard</a>');
   }
-  if (!window.supabase || !window.supabase.createClient) { showMessage('Could not load the city', 'The data library did not load. Check your internet connection and reload.', '<a class="link" href="index.html">← Back to the dashboard</a>'); return; }
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
-  const { data } = await sb.auth.getSession();
-  if (!data.session) { showMessage('Sign in first', 'The Smart City shows live data from the tracker, so you need to be signed in.', '<a class="link" href="index.html">Go to the dashboard to sign in →</a>'); return; }
   try { await loadData(); }
   catch (err) { showMessage('Could not load the city', esc(err.message || 'The tracker data did not load.'), '<button class="btn" onclick="location.reload()">Try again</button> <a class="link" href="index.html">← Dashboard</a>'); return; }
   if (renderer) msgEl.hidden = true;
@@ -1030,10 +1019,7 @@ async function start() {
   animate();
   // live updates from the tracker: rebuild the city, keep the camera where it is
   let timer;
-  sb.channel('aha-city')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_items' }, () => { clearTimeout(timer); timer = setTimeout(refresh, 600); })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'initiatives' }, () => { clearTimeout(timer); timer = setTimeout(refresh, 600); })
-    .subscribe();
+  if (ADAPTER && typeof ADAPTER.subscribe === 'function') ADAPTER.subscribe(() => { clearTimeout(timer); timer = setTimeout(refresh, 600); });
 }
 async function refresh() {
   try { await loadData(); } catch { return; }
